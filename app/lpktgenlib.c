@@ -2967,7 +2967,7 @@ pktgen_linkState(lua_State *L)
 
 /**
  *
- * port_sizes - return port size stats on a port
+ * pkt_sizes - return port size stats on a port
  *
  * DESCRIPTION
  * Return the stats on packet sizes for a given port.
@@ -2978,11 +2978,11 @@ pktgen_linkState(lua_State *L)
  */
 
 static void
-port_sizes(lua_State *L, port_info_t *info)
+pkt_sizes(lua_State *L, port_info_t *info)
 {
-    port_sizes_t sizes = {0};
+    pkt_sizes_t sizes = {0};
 
-    pktgen_port_sizes(info->pid, &sizes);
+    pktgen_pkt_sizes(info->pid, &sizes);
 
     lua_pushinteger(L, info->pid); /* Push the table index */
     lua_newtable(L);               /* Create the structure table for a packet */
@@ -3033,7 +3033,7 @@ pktgen_portSizes(lua_State *L)
     lua_newtable(L);
 
     n = 0;
-    foreach_port(portlist, _do(port_sizes(L, info); n++));
+    foreach_port(portlist, _do(pkt_sizes(L, info); n++));
 
     setf_integer(L, "n", n);
 
@@ -3246,7 +3246,7 @@ port_info(lua_State *L, port_info_t *info)
     struct rte_eth_dev_info dev = {0};
     eth_stats_t stats           = {0};
     pkt_stats_t pkt_stats       = {0};
-    port_sizes_t sizes          = {0};
+    pkt_sizes_t sizes           = {0};
     pkt_seq_t *pkt;
     char buff[32] = {0};
 
@@ -3280,7 +3280,7 @@ port_info(lua_State *L, port_info_t *info)
     setf_integer(L, "mbits_tx", oBitsTotal(stats) / Million);
     lua_rawset(L, -3);
 
-    pktgen_port_sizes(info->pid, &sizes);
+    pktgen_pkt_sizes(info->pid, &sizes);
 
     /*------------------------------------*/
     lua_pushstring(L, "size_cnts");
@@ -4040,7 +4040,7 @@ luaopen_pktgen(lua_State *L)
     setf_integer(L, "maxPktRxBurst", MAX_PKT_RX_BURST);
     setf_integer(L, "maxPktTxBurst", MAX_PKT_TX_BURST);
     setf_integer(L, "defaultBuffSize", DEFAULT_MBUF_SIZE);
-    setf_integer(L, "maxMbufsPerPort", MAX_MBUFS_PER_PORT);
+    setf_integer(L, "maxMbufsPerPort", MAX_MBUFS_PER_PORT(pktgen.nb_rxd, pktgen.nb_txd);
     setf_integer(L, "maxPrimeCount", MAX_PRIME_COUNT);
 
     /* Now set the table for the info values. */

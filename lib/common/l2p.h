@@ -131,9 +131,6 @@ l2p_create(void)
     if (l2p == NULL)
         return NULL;
 
-    /* I know calloc zeros memory, but just to be safe. */
-    memset(l2p, 0, sizeof(l2p_t));
-
     for (i = 0; i < RTE_MAX_LCORE; i++)
         l2p->lcores[i].lid = i;
 

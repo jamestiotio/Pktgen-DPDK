@@ -511,8 +511,8 @@ main(int argc, char **argv)
     if (pktgen.verbose)
         pktgen_log_info(
             ">>> Packet Max Burst %d/%d, RX Desc %d, TX Desc %d, mbufs/port %d, mbuf cache %d",
-            MAX_PKT_RX_BURST, MAX_PKT_TX_BURST, DEFAULT_RX_DESC, DEFAULT_TX_DESC,
-            MAX_MBUFS_PER_PORT, MBUF_CACHE_SIZE);
+            MAX_PKT_RX_BURST, MAX_PKT_TX_BURST, pktgen.nb_rxd, pktgen.nb_txd,
+            MAX_MBUFS_PER_PORT(pktgen.nb_rxd, pktgen.nb_txd), MBUF_CACHE_SIZE);
 
     /* Configure and initialize the ports */
     pktgen_config_ports();
@@ -532,8 +532,9 @@ main(int argc, char **argv)
     /* Disable printing log messages of level info and below to screen, */
     /* erase the screen and start updating the screen again. */
     pktgen_log_set_screen_level(LOG_LEVEL_WARNING);
-    scrn_erase(this_scrn->nrows);
 
+    scrn_pos(this_scrn->nrows, 1);
+    scrn_col_repeat(this_scrn->nrows, 1, "\n", 128);
     scrn_resume();
 
     pktgen_clear_display();
@@ -561,11 +562,12 @@ main(int argc, char **argv)
     }
 
     pktgen_log_info("=== Run CLI\n");
+
     cli_start(NULL);
 
     scrn_pause();
     scrn_setw(1);              /* Reset the window size, from possible crash run. */
-    scrn_printf(100, 1, "\n"); /* Move the cursor to the bottom of the screen again */
+    scrn_printf(this_scrn->nrows, 1, "\n"); /* Move the cursor to the bottom of the screen again */
 
     pktgen_stop_running();
 
