@@ -4040,7 +4040,7 @@ luaopen_pktgen(lua_State *L)
     setf_integer(L, "maxPktRxBurst", MAX_PKT_RX_BURST);
     setf_integer(L, "maxPktTxBurst", MAX_PKT_TX_BURST);
     setf_integer(L, "defaultBuffSize", DEFAULT_MBUF_SIZE);
-    setf_integer(L, "maxMbufsPerPort", MAX_MBUFS_PER_PORT(pktgen.nb_rxd, pktgen.nb_txd);
+    setf_integer(L, "maxMbufsPerPort", MAX_MBUFS_PER_PORT(pktgen.nb_rxd, pktgen.nb_txd));
     setf_integer(L, "maxPrimeCount", MAX_PRIME_COUNT);
 
     /* Now set the table for the info values. */
