@@ -1400,10 +1400,10 @@ enable_clock_gettime(uint32_t onOff)
 void
 debug_tx_rate(port_info_t *info)
 {
-    printf("  %d: rate %.2f, tx_cycles %ld, tx_pps %ld, link %s-%d-%s\n", info->pid, info->tx_rate,
+    printf("  %d: rate %.2f, tx_cycles %'ld, tx_pps %'ld, link %s-%d-%s, hz %'ld\n", info->pid, info->tx_rate,
            info->tx_cycles, info->tx_pps, (info->link.link_status) ? "UP" : "Down",
            info->link.link_speed,
-           (info->link.link_duplex == RTE_ETH_LINK_FULL_DUPLEX) ? "FD" : "HD");
+           (info->link.link_duplex == RTE_ETH_LINK_FULL_DUPLEX) ? "FD" : "HD", pktgen.hz);
 }
 
 /*

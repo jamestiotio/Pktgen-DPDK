@@ -141,8 +141,11 @@ getf_etheraddr(lua_State *L, const char *field, struct rte_ether_addr *value)
 {
     lua_getfield(L, 3, field);
     if (lua_isstring(L, -1))
-        if (pg_ether_aton(luaL_checkstring(L, -1), value) == NULL)
-            lua_putstring("failed to convert MAC string %s\n", luaL_checkstring(L, -1));
+        if (pg_ether_aton(luaL_checkstring(L, -1), value) == NULL) {
+            lua_putstring("failed to convert MAC string ");
+            lua_putstring(luaL_checkstring(L, -1));
+            lua_putstring("\n");
+        }
     lua_pop(L, 1);
 }
 
@@ -264,11 +267,15 @@ set_seq(lua_State *L, uint32_t seqnum)
     if (portlist == INVALID_PORTLIST)
         return luaL_error(L, "invalid portlist");
     if (pg_ether_aton(luaL_checkstring(L, 3), &daddr) == NULL) {
-        lua_putstring("invalid destination MAC string %s\n", luaL_checkstring(L, 3));
+        lua_putstring("invalid destination MAC string ");
+        lua_putstring(luaL_checkstring(L, 3));
+        lua_putstring("\n");
         return -1;
     }
     if (pg_ether_aton(luaL_checkstring(L, 4), &saddr) == NULL) {
-        lua_putstring("invalid source MAC string %s\n", luaL_checkstring(L, 4));
+        lua_putstring("invalid source MAC string ");
+        lua_putstring(luaL_checkstring(L, 4));
+        lua_putstring("\n");
         return -1;
     }
 
@@ -544,7 +551,9 @@ pktgen_set_mac(lua_State *L)
     if (portlist == INVALID_PORTLIST)
         return luaL_error(L, "invalid portlist");
     if (pg_ether_aton(luaL_checkstring(L, 3), &mac) == NULL) {
-        lua_putstring("invalid MAC string (%s)\n ", luaL_checkstring(L, 3));
+        lua_putstring("invalid MAC string ");
+        lua_putstring(luaL_checkstring(L, 3));
+        lua_putstring(")\n");
         return luaL_error(L, "invalid MAC string");
     }
 
@@ -1343,7 +1352,9 @@ range_dst_mac(lua_State *L)
     if (portlist == INVALID_PORTLIST)
         return luaL_error(L, "invalid portlist");
     if (pg_ether_aton(luaL_checkstring(L, 3), &mac) == NULL) {
-        lua_putstring("invalid destination MAC string %s\n", luaL_checkstring(L, 3));
+        lua_putstring("invalid destination MAC string ");
+        lua_putstring(luaL_checkstring(L, 3));
+        lua_putstring("\n");
         return -1;
     }
 
@@ -1381,7 +1392,9 @@ range_src_mac(lua_State *L)
     if (portlist == INVALID_PORTLIST)
         return luaL_error(L, "invalid portlist");
     if (pg_ether_aton(luaL_checkstring(L, 3), &mac) == NULL) {
-        lua_putstring("invalid source MAC string %s\n", luaL_checkstring(L, 3));
+        lua_putstring("invalid source MAC string ");
+        lua_putstring(luaL_checkstring(L, 3));
+        lua_putstring("\n");
         return -1;
     }
 
@@ -3701,6 +3714,34 @@ pktgen_run(lua_State *L)
     return 0;
 }
 
+/**
+ *
+ * pktgen_clock_gettime - Enable or Disable clock_gettime support.
+ *
+ * DESCRIPTION
+ * Enable or disable clock_gettime support.
+ *
+ * RETURNS: N/A
+ *
+ * SEE ALSO:
+ */
+
+static int
+pktgen_clock_gettime(lua_State *L)
+{
+    switch (lua_gettop(L)) {
+    default:
+        return luaL_error(L, "clock_gettime, wrong number of arguments");
+    case 1:
+        break;
+    }
+
+    enable_clock_gettime(estate((char *)luaL_checkstring(L, 1)));
+
+    pktgen_update_display();
+    return 0;
+}
+
 static const char *lua_help_info[] = {
     "Pktgen Lua functions and values using pktgen.XXX to access\n",
     "set            - Set a number of options\n",
@@ -3732,6 +3773,7 @@ static const char *lua_help_info[] = {
     "clear          - Clear stats for the given ports\n",
     "clr            - Clear all stats on all ports\n",
     "cls            - Redraw the screen\n",
+    "clock_gettime  - Enable or Disable using clock_gettime() data\n",
     "\n",
     "update         - Update the screen information\n",
     "reset          - Reset the configuration to all ports\n",
@@ -3760,6 +3802,12 @@ static const char *lua_help_info[] = {
     "range          - Enable or disable sending range data on a port.\n",
     "rxtap          - Enable or disable RX Tap packet processing on a port\n",
     "txtap          - Enable or disable TX Tap packet processing on a port\n",
+    "latsampler_params - set latency sampler params\n",
+    "latsampler     - enable or disable latency sampler\n",
+    "pattern        - Set pattern type\n",
+    "userPattern    - Set the user pattern string\n",
+    "jitter         - Set the jitter threshold\n",
+    "gtpu_teid      - Set GTP-U TEID\n",
     "\n",
     "page           - Select a page to display, seq, range, pcap and a number from 0-N\n",
     "port           - select a different port number used for sequence and range pages.\n",
@@ -3977,6 +4025,8 @@ static const luaL_Reg pktgenlib[] = {
 
     {"latsampler_params", pktgen_latsampler_params}, /* set latency sampler params */
     {"latsampler", pktgen_latsampler},               /* enable or disable latency sampler */
+
+    {"clock_gettime", pktgen_clock_gettime},         /* Enable/disable clock_gettime support */
 
     {NULL, NULL}};
 
