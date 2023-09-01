@@ -232,7 +232,6 @@ typedef struct port_info_s {
 
     rate_info_t rate;
 
-    RTE_STD_C11
     union {
         uint64_t vxlan; /**< VxLAN 64 bit word */
         struct {
