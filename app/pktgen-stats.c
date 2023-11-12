@@ -617,7 +617,7 @@ pktgen_page_phys_stats(uint16_t pid)
 
     hdr = 0;
     for (q = 0; q < RTE_ETHDEV_QUEUE_STAT_CNTRS; q++) {
-        uint64_t rxpkts, txpkts, txbytes, rxbytes, errors;
+        uint64_t rxpkts, pktperf, txbytes, rxbytes, errors;
 
         if (!hdr) {
             hdr = 1;
@@ -629,12 +629,12 @@ pktgen_page_phys_stats(uint16_t pid)
         }
 
         rxpkts  = r->q_ipackets[q];
-        txpkts  = r->q_opackets[q];
+        pktperf = r->q_opackets[q];
         rxbytes = r->q_ibytes[q] / Million;
         txbytes = r->q_obytes[q] / Million;
         errors  = r->q_errors[q];
 
-        scrn_printf(row++, 1, "  Q %2d: %'15lu %'15lu %'17lu %'17lu %'15lu", q, rxpkts, txpkts,
+        scrn_printf(row++, 1, "  Q %2d: %'15lu %'15lu %'17lu %'17lu %'15lu", q, rxpkts, pktperf,
                     rxbytes, txbytes, errors);
     }
     pktgen_display_set_color(NULL);
