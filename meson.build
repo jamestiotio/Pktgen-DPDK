@@ -75,11 +75,8 @@ else
 
 	dpdk_bond = cc.find_library('librte_net_bond', dirs: [dpdk_libs_path], required: false)
 
-	subdir('tools')
-
-	subdir('lib')
-
-	subdir('app')
-
-	subdir('doc')
+	subdirs =['tools', 'lib', 'examples', 'app', 'doc']
+	foreach d:subdirs
+		subdir(d)
+	endforeach
 endif
