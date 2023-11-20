@@ -262,8 +262,8 @@ main(int argc, char **argv)
 
     /* Display the statistics  */
     do {
-        rte_delay_us_sleep(info->timeout_secs * Million);
         print_stats();
+        rte_delay_us_sleep(info->timeout_secs * Million);
     } while (!info->force_quit);
 
     RTE_LCORE_FOREACH_WORKER(lid)
