@@ -67,7 +67,7 @@ pktperf [EAL options] -- [-b burst] [-s size] [-r rate] [-d rxd/txd] [-m map] [-
 ### Command line examples
 
 ```bash
-sudo Builddir/examples/pktperf/pktperf -l 1,2-7,14-19 -a 03:00.0 -a 82:00.0 -- -T 1 -b 32 -s 64 -r 100 -m "2-4:5-7.0" -m "14-16:17-19.1"
+sudo Builddir/examples/pktperf/pktperf -l 1,2-9,14-21 -a 03:00.0 -a 82:00.0 -- -T 1 -b 32 -s 64 -r 100 -m "2-5:6-9.0" -m "14-17:18-21.1"
 ```
 
 The `-m` argument defines the core to port mapping `<RxCores:TxCores>.<port>` the `:` (colon) is used to specify the the Rx and Tx cores for the port mapping. Leaving off the ':' is equivalent to running Rx and Tx processing on the specified core(s). When present the left side denotes the core(s) to use for receive processing and the right side denotes the core(s) to use for transmit processing.
@@ -75,20 +75,21 @@ The `-m` argument defines the core to port mapping `<RxCores:TxCores>.<port>` th
 ### Example console output
 
 ```bash
-Port    : Rate Statistics per queue (\)
- 0 >> Link up at 40 Gbps FDX Autoneg, WireSize 672 Bits, PPS 59,523,809, Cycles/Burst 3,840
-  RxQs  :    1,965,546    1,965,916            0 Total:    3,931,462
-  TxQs  :    1,553,024    1,323,424    1,076,832 Total:    3,953,280
-  TxDrop:      571,424      800,960    1,047,616 Total:    2,420,000
-  NoMBUF:            0            0            0 Total:            0
-  TxTime:          375          363          342 Total:        1,080
-  Missed: 38,191,100, ierr: 0, oerr: 0, rxNoMbuf: 0
- 1 >> Link up at 100 Gbps FDX Autoneg, WireSize 672 Bits, PPS 148,809,523, Cycles/Burst 1,536
-  RxQs  :            0    2,655,092    7,964,288 Total:   10,619,380
-  TxQs  :    3,337,792    3,337,760    3,337,728 Total:   10,013,280
-  TxDrop:    1,911,648    1,910,848    1,908,384 Total:    5,730,880
-  NoMBUF:            0            0            0 Total:            0
-  TxTime:          570          543          498 Total:        1,611
-  Missed: 105,164,782, ierr: 0, oerr: 0, rxNoMbuf: 0
+Port    : Rate Statistics per queue (/)
+ 0 >> Link up at 40 Gbps FDX Autoneg, WireSize 672 Bits, PPS 59,523,809, Cycles/Burst 5,120
+  RxQs  :    5,882,600    5,883,576    5,883,280            0 Total:   17,649,456
+  TxQs  :    4,471,776    3,619,136    4,395,520    5,248,096 Total:   17,734,528
+  TxDrop:    2,676,736    3,534,048    2,759,104    1,906,432 Total:   10,876,320
+  NoMBUF:            0            0            0            0 Total:            0
+  TxTime:          336          330          351          339 Total:        1,356
+  RxMissed: 22,464,432, ierr: 0, oerr: 0, rxNoMbuf: 0
+ 1 >> Link up at 100 Gbps FDX Autoneg, WireSize 672 Bits, PPS 148,809,523, Cycles/Burst 2,048
+  RxQs  :   22,884,464            0   11,233,080   11,442,974 Total:   45,560,518
+  TxQs  :   11,183,040   11,183,072   11,183,040   11,183,040 Total:   44,732,192
+  TxDrop:    6,528,832    6,522,656    6,536,576    6,521,824 Total:   26,109,888
+  NoMBUF:            0            0            0            0 Total:            0
+  TxTime:          525          537          543          621 Total:        2,226
+  RxMissed: 62,477,021, ierr: 0, oerr: 0, RxNoMbuf: 0
 
-Burst: 32, MBUF Count: 10,816, PktSize:64, Rx/Tx 1,024/1,024, Rate 100%```
+Burst: 32, MBUF Count: 12,864, PktSize:64, Rx/Tx 1,024/1,024, Rate 100%
+```
