@@ -109,8 +109,8 @@ print_stats(void)
         sprint("NoMBUF", q_no_mbufs);
         sprint("TxTime", q_tx_time);
 
-        printf("  Missed: %'" PRIu64 ", ierr: %'" PRIu64 ", oerr: %'" PRIu64 ", rxNoMbuf: %'" PRIu64
-               "\n",
+        printf("  RxMissed: %'12" PRIu64 ", ierr: %'" PRIu64 ", oerr: %'" PRIu64
+               ", RxNoMbuf: %'" PRIu64 "\n",
                rate.imissed, rate.ierrors, rate.oerrors, rate.rx_nombuf);
     }
     printf("\nBurst: %'u, MBUF Count: %'" PRIu32 ", PktSize:%'" PRIu32
