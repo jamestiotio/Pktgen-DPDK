@@ -26,9 +26,11 @@ txpkts_info_t *info;
 static __inline__ void
 mbuf_iterate_cb(struct rte_mempool *mp, void *opaque, void *obj, unsigned obj_idx __rte_unused)
 {
-    uint8_t *pkt       = (uint8_t *)opaque;
+    lport_t *lport     = (lport_t *)opaque;
     struct rte_mbuf *m = (struct rte_mbuf *)obj;
     uint16_t plen      = info->pkt_size - RTE_ETHER_CRC_LEN;
+
+    packet_constructor(lport, rte_pktmbuf_mtod(m, uint8_t *));
 
     m->pool     = mp;
     m->next     = NULL;
@@ -36,8 +38,6 @@ mbuf_iterate_cb(struct rte_mempool *mp, void *opaque, void *obj, unsigned obj_id
     m->pkt_len  = plen;
     m->port     = 0;
     m->ol_flags = 0;
-
-    memcpy(rte_pktmbuf_mtod(m, void *), pkt, plen);
 }
 
 /* main processing loop */
@@ -47,8 +47,7 @@ rx_loop(void)
     unsigned lcore_id = rte_lcore_id();
     lport_t *lport;
     port_t *port;
-    uint16_t rx_burst_count = info->burst_count; /* twice the size of TX burst */
-    struct rte_mbuf *rx_mbufs[rx_burst_count];
+    struct rte_mbuf *rx_mbufs[info->burst_count];
     qstats_t *c;
     uint16_t pid, rx_qid;
     uint16_t nb_pkts;
@@ -63,7 +62,7 @@ rx_loop(void)
 
     while (!info->force_quit) {
         /* drain the RX queue */
-        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, rx_burst_count);
+        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, info->burst_count);
         for (uint16_t i = 0; i < nb_pkts; i++)
             c->q_ibytes[rx_qid] += rte_pktmbuf_pkt_len(rx_mbufs[i]);
         c->q_ipackets[rx_qid] += nb_pkts;
@@ -79,7 +78,6 @@ tx_loop(void)
     unsigned lcore_id = rte_lcore_id();
     lport_t *lport;
     port_t *port;
-    uint8_t *pkt;
     struct rte_mbuf *tx_mbufs[info->burst_count];
     struct rte_mempool *tx_mp;
     qstats_t *c;
@@ -98,10 +96,8 @@ tx_loop(void)
 
     packet_rate(port); /* determine the Tx packet burst rate */
 
-    pkt = packet_constructor(lport); /* Create packet data, which must be freed */
     /* iterate over all buffers in the pktmbuf pool and setup the packet data */
-    rte_mempool_obj_iter(port->pq[tx_qid].tx_mp, mbuf_iterate_cb, (void *)pkt);
-    rte_free(pkt); /* must free the pkt pointer from packet_constructor() */
+    rte_mempool_obj_iter(port->pq[tx_qid].tx_mp, mbuf_iterate_cb, (void *)lport);
 
     burst_tsc = rte_rdtsc() + port->tx_cycles;
 
@@ -113,6 +109,8 @@ tx_loop(void)
 
             if (unlikely(port->tx_cycles == 0) || unlikely(info->tx_rate == 0))
                 continue;
+
+            /* Use mempool routines directly to avoid pktmbuf overhead and reseting frame data */
             if (rte_mempool_get_bulk(tx_mp, (void **)tx_mbufs, info->burst_count) == 0) {
                 uint16_t plen = info->pkt_size - RTE_ETHER_CRC_LEN;
 
@@ -139,9 +137,7 @@ rxtx_loop(void)
     unsigned lcore_id = rte_lcore_id();
     lport_t *lport;
     port_t *port;
-    uint8_t *pkt;
-    uint16_t rx_burst_count = info->burst_count * 2; /* twice the size of TX burst */
-    struct rte_mbuf *rx_mbufs[rx_burst_count];
+    struct rte_mbuf *rx_mbufs[info->burst_count];
     struct rte_mempool *tx_mp;
     qstats_t *c;
     uint16_t pid, rx_qid, tx_qid;
@@ -160,10 +156,8 @@ rxtx_loop(void)
 
     packet_rate(port); /* determine the Tx packet burst rate */
 
-    pkt = packet_constructor(lport); /* Create packet data, which must be freed */
     /* iterate over all buffers in the pktmbuf pool and setup the packet data */
-    rte_mempool_obj_iter(port->pq[tx_qid].tx_mp, mbuf_iterate_cb, (void *)pkt);
-    rte_free(pkt); /* must free the pkt pointer from packet_constructor() */
+    rte_mempool_obj_iter(port->pq[tx_qid].tx_mp, mbuf_iterate_cb, (void *)lport);
 
     burst_tsc = rte_rdtsc() + port->tx_cycles;
 
@@ -171,7 +165,7 @@ rxtx_loop(void)
         curr_tsc = rte_rdtsc();
 
         /* drain the RX queue */
-        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, rx_burst_count);
+        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, info->burst_count);
         for (uint16_t i = 0; i < nb_pkts; i++)
             c->q_ibytes[rx_qid] += rte_pktmbuf_pkt_len(rx_mbufs[i]);
         c->q_ipackets[rx_qid] += nb_pkts;

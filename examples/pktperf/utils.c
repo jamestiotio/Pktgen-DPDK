@@ -76,30 +76,18 @@ get_rand(long range)
  * MAC Destination     :    3c:fd:fe:e4:34:c0
  *     Source          :    3c:fd:fe:e4:38:40
  */
-uint8_t *
-packet_constructor(lport_t *lport)
+void
+packet_constructor(lport_t *lport, uint8_t *pkt)
 {
     port_t *port = lport->port;
-    uint8_t *pkt;
     uint16_t len;
     char addr[32];
-    char name[RTE_MEMPOOL_NAMESIZE];
     struct rte_ether_hdr *eth;
     struct rte_ipv4_hdr *ipv4;
     struct rte_udp_hdr *udp;
-    uint16_t lid, pid, tx_qid;
+    uint16_t tx_qid;
 
-    lid    = lport->lid;
-    pid    = port->pid;
     tx_qid = lport->tx_qid;
-
-    snprintf(name, sizeof(name), "pkt_%u_%u_%u", lid, pid, tx_qid);
-    DBG_PRINT(">>> Core %u(%u) Port %u:%u name '%s'\n", lid, rte_lcore_id(), pid, tx_qid, name);
-
-    pkt = rte_zmalloc_socket(name, PKT_BUFF_SIZE, RTE_CACHE_LINE_SIZE, rte_eth_dev_socket_id(pid));
-    if (!pkt)
-        rte_exit(EXIT_FAILURE, "Failed to allocate memory for packet on %u:%u:%u\n", lid, pid,
-                 tx_qid);
 
     eth  = (struct rte_ether_hdr *)pkt;
     ipv4 = (struct rte_ipv4_hdr *)(pkt + sizeof(struct rte_ether_hdr));
@@ -134,7 +122,7 @@ packet_constructor(lport_t *lport)
     inet_pton(AF_INET, addr, &ipv4->src_addr);
 
     udp->src_port = rte_cpu_to_be_16(get_rand(0xFFFE) + 1);
-    udp->dst_port = rte_cpu_to_be_16(get_rand(0xFFFe) + 1);
+    udp->dst_port = rte_cpu_to_be_16(get_rand(0xFFFE) + 1);
 
     len = (uint16_t)(info->pkt_size - sizeof(struct rte_ether_hdr) - sizeof(struct rte_ipv4_hdr) -
                      RTE_ETHER_CRC_LEN);
@@ -143,6 +131,4 @@ packet_constructor(lport_t *lport)
     udp->dgram_cksum = rte_ipv4_udptcp_cksum(ipv4, udp);
 
     ipv4->hdr_checksum = rte_ipv4_cksum(ipv4);
-
-    return pkt;
 }
