@@ -170,7 +170,7 @@ int parse_args(int argc, char **argv);
 void packet_rate(port_t *port);
 void print_stats(void);
 int port_setup(port_t *port);
-uint8_t *packet_constructor(lport_t *lport);
+void packet_constructor(lport_t *lport, uint8_t *pkt);
 
 #ifdef __cplusplus
 }
