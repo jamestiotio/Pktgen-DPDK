@@ -202,6 +202,9 @@ txpkts_launch_one_lcore(__rte_unused void *dummy)
 {
     lport_t *lport = info->lports[rte_lcore_id()];
 
+    if (lport == NULL || lport->port == NULL || lport->port->pid >= RTE_MAX_ETHPORTS)
+        return 0;
+
     switch (lport->mode) {
     case LCORE_MODE_RX:
         rx_loop();
