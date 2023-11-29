@@ -27,8 +27,10 @@ typedef union {
     uint32_t word;
 } lc_info_t;
 
-int coremap(const char *opt, lc_info_t *get, int cnt, const char *proc_cpuinfo);
-unsigned coremap_cnt(const lc_info_t *lc, unsigned max_cnt, unsigned t);
+int coremap(const char *opt);
+lc_info_t *coremap_get(int idx);
+unsigned coremap_cnt(unsigned typ);
+int coremap_core_cnt(void);
 
 #ifdef __cplusplus
 }

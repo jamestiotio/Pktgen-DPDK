@@ -19,9 +19,9 @@
 #include <rte_bus.h>
 
 static void
-calculate_rate(port_info_t *info)
+calculate_rate(port_info_t *pinfo)
 {
-    rate_info_t *rate = &info->rate;
+    rate_info_t *rate = &pinfo->rate;
 
     rate->bytes_per_vframe = (rate->vlines * rate->pixels * rate->color_bits) / 8;
     rate->bits_per_sec     = (rate->bytes_per_vframe * rate->fps) * 8;
@@ -32,13 +32,13 @@ calculate_rate(port_info_t *info)
 
     rate->cycles_per_pkt = (pktgen.hz / rate->total_pkts_per_sec);
 
-    info->tx_cycles = info->rate.cycles_per_pkt;
+    pinfo->tx_cycles = pinfo->rate.cycles_per_pkt;
 }
 
 void
-pktgen_rate_init(port_info_t *info)
+pktgen_rate_init(port_info_t *pinfo)
 {
-    rate_info_t *rate = &info->rate;
+    rate_info_t *rate = &pinfo->rate;
 
     rate->fps        = 60;
     rate->vlines     = 720;
@@ -48,26 +48,26 @@ pktgen_rate_init(port_info_t *info)
     rate->payload  = 800;
     rate->overhead = 62;
 
-    calculate_rate(info);
+    calculate_rate(pinfo);
 }
 
 void
-update_rate_values(port_info_t *info)
+update_rate_values(port_info_t *pinfo)
 {
-    rate_info_t *rate = &info->rate;
+    rate_info_t *rate = &pinfo->rate;
 
-    info->seq_pkt[RATE_PKT].ipProto = PG_IPPROTO_UDP;
-    info->seq_pkt[RATE_PKT].pktSize = (rate->payload + rate->overhead) - RTE_ETHER_CRC_LEN;
+    pinfo->seq_pkt[RATE_PKT].ipProto  = PG_IPPROTO_UDP;
+    pinfo->seq_pkt[RATE_PKT].pkt_size = (rate->payload + rate->overhead) - RTE_ETHER_CRC_LEN;
 
-    info->tx_burst = 1;
+    pinfo->tx_burst = 1;
 
-    calculate_rate(info);
+    calculate_rate(pinfo);
 }
 
 void
-rate_set_value(port_info_t *info, const char *what, uint32_t value)
+rate_set_value(port_info_t *pinfo, const char *what, uint32_t value)
 {
-    rate_info_t *rate = &info->rate;
+    rate_info_t *rate = &pinfo->rate;
 
     if (!strcmp(what, "fps")) {
         if (value < 1)
@@ -86,10 +86,10 @@ rate_set_value(port_info_t *info, const char *what, uint32_t value)
             value = 1;
         rate->color_bits = value;
     } else if (!strcmp(what, "payload")) {
-        if ((value + rate->payload) <= (uint32_t)(pktgen.eth_max_pkt - RTE_ETHER_CRC_LEN))
+        if ((value + rate->payload) <= (uint32_t)(RTE_ETHER_MAX_LEN - RTE_ETHER_CRC_LEN))
             rate->payload = value;
     } else if (!strcmp(what, "overhead")) {
-        if ((value + rate->overhead) <= (uint32_t)(pktgen.eth_max_pkt - RTE_ETHER_CRC_LEN))
+        if ((value + rate->overhead) <= (uint32_t)(RTE_ETHER_MAX_LEN - RTE_ETHER_CRC_LEN))
             rate->overhead = value;
     }
 }
@@ -107,11 +107,11 @@ rate_set_value(port_info_t *info, const char *what, uint32_t value)
  */
 
 void
-pktgen_rate_setup(port_info_t *info)
+pktgen_rate_setup(port_info_t *pinfo)
 {
-    rte_memcpy(&info->seq_pkt[RATE_PKT], &info->seq_pkt[SINGLE_PKT], sizeof(pkt_seq_t));
+    rte_memcpy(&pinfo->seq_pkt[RATE_PKT], &pinfo->seq_pkt[SINGLE_PKT], sizeof(pkt_seq_t));
 
-    pktgen_rate_init(info);
+    pktgen_rate_init(pinfo);
 }
 
 /**
@@ -129,21 +129,19 @@ pktgen_rate_setup(port_info_t *info)
 static void
 rate_print_static_data(void)
 {
-    port_info_t *info;
+    port_info_t *pinfo;
     struct rte_eth_dev_info dev = {0};
     uint32_t pid, col, row, sp, ip_row;
     pkt_seq_t *pkt;
     char buff[INET6_ADDRSTRLEN * 2];
     int display_cnt;
 
-    pktgen_display_set_color("top.page");
-    display_topline("<Rate-Pacing Page>");
+    display_topline("<Rate-Pacing Page>", pktgen.starting_port, (pktgen.ending_port - 1),
+                    pktgen.nb_ports);
 
     pktgen_display_set_color("top.ports");
-    scrn_printf(1, 3, "Ports %d-%d of %d", pktgen.starting_port, (pktgen.ending_port - 1),
-                pktgen.nb_ports);
 
-    row = PORT_STATE_ROW;
+    row = PORT_FLAGS_ROW;
     pktgen_display_set_color("stats.port.label");
     scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Port:Flags");
 
@@ -191,18 +189,17 @@ rate_print_static_data(void)
     display_dashline(pktgen.last_row);
 
     /* Display the colon after the row label. */
-    pktgen_print_div(PORT_STATE_ROW, pktgen.last_row - 1, COLUMN_WIDTH_0 - 1);
+    pktgen_print_div(PORT_FLAGS_ROW, pktgen.last_row - 1, COLUMN_WIDTH_0 - 1);
 
     pktgen_display_set_color("stats.stat.values");
     sp          = pktgen.starting_port;
     display_cnt = 0;
     for (pid = 0; pid < pktgen.nb_ports_per_page; pid++) {
-        if (get_map(pktgen.l2p, pid + sp, RTE_MAX_LCORE) == 0)
+        pinfo = l2p_get_port_pinfo(pid + sp);
+        if (pinfo == NULL)
             continue;
 
-        info = &pktgen.info[pid + sp];
-
-        pkt = &info->seq_pkt[RATE_PKT];
+        pkt = &pinfo->seq_pkt[RATE_PKT];
 
         pktgen_display_set_color("stats.stat.values");
         /* Display Port information Src/Dest IP addr, Netmask, Src/Dst MAC addr */
@@ -214,10 +211,10 @@ rate_print_static_data(void)
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
         pktgen_display_set_color("stats.stat.values");
-        snprintf(buff, sizeof(buff), "%d /%5d:%5d", pkt->pktSize + RTE_ETHER_CRC_LEN,
-                 info->rx_burst, info->tx_burst);
+        snprintf(buff, sizeof(buff), "%d /%'5d:%'5d", pkt->pkt_size + RTE_ETHER_CRC_LEN,
+                 pinfo->rx_burst, pinfo->tx_burst);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
-        snprintf(buff, sizeof(buff), "%d/%5d/%5d", pkt->ttl, pkt->sport, pkt->dport);
+        snprintf(buff, sizeof(buff), "%d/%'5d/%'5d", pkt->ttl, pkt->sport, pkt->dport);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
         snprintf(buff, sizeof(buff), "%s / %s",
                  (pkt->ethType == RTE_ETHER_TYPE_IPV4)   ? "IPv4"
@@ -304,7 +301,7 @@ rate_print_static_data(void)
 void
 pktgen_page_rate(void)
 {
-    port_info_t *info;
+    port_info_t *pinfo;
     rate_info_t *rate;
     latency_t *lat;
     unsigned int pid, col, row;
@@ -315,24 +312,23 @@ pktgen_page_rate(void)
     if (pktgen.flags & PRINT_LABELS_FLAG)
         rate_print_static_data();
 
-    memset(&pktgen.cumm_rate_totals, 0, sizeof(eth_stats_t));
+    memset(&pktgen.cumm_rate_totals, 0, sizeof(struct rte_eth_stats));
 
     sp          = pktgen.starting_port;
     display_cnt = 0;
     for (pid = 0; pid < pktgen.nb_ports_per_page; pid++) {
-        if (get_map(pktgen.l2p, pid + sp, RTE_MAX_LCORE) == 0)
+        pinfo = l2p_get_port_pinfo(pid + sp);
+        if (pinfo == NULL)
             continue;
-
-        info = &pktgen.info[pid + sp];
-        rate = &info->rate;
-        lat  = &info->latency;
+        rate = &pinfo->rate;
+        lat  = &pinfo->latency;
 
         /* Display the disable string when port is not enabled. */
         col = (COLUMN_WIDTH_1 * pid) + COLUMN_WIDTH_0;
-        row = PORT_STATE_ROW;
+        row = PORT_FLAGS_ROW;
 
         /* Display the port number for the column */
-        snprintf(buff, sizeof(buff), "%d:%s", pid + sp, pktgen_flags_string(info));
+        snprintf(buff, sizeof(buff), "%d:%s", pid + sp, pktgen_flags_string(pinfo));
         pktgen_display_set_color("stats.port.flags");
         scrn_printf(row, col, "%*s", COLUMN_WIDTH_1, buff);
         pktgen_display_set_color(NULL);
@@ -340,7 +336,7 @@ pktgen_page_rate(void)
         row = LINK_STATE_ROW;
 
         /* Grab the link state of the port and display Duplex/Speed and UP/Down */
-        pktgen_get_link_status(info, pid, 0);
+        pktgen_get_link_status(pinfo);
 
         pktgen_link_state(pid, buff, sizeof(buff));
         pktgen_display_set_color("stats.port.status");
@@ -350,53 +346,53 @@ pktgen_page_rate(void)
         pktgen_display_set_color("stats.port.rate");
         /* Rx/Tx pkts/s rate */
         row = LINK_STATE_ROW + 1;
-        snprintf(buff, sizeof(buff), "%" PRIu64 "/%" PRIu64, info->max_ipackets,
-                 info->rate_stats.ipackets);
+        snprintf(buff, sizeof(buff), "%'" PRIu64 "/%'" PRIu64, pinfo->max_ipackets,
+                 pinfo->rate_stats.ipackets);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%" PRIu64 "/%" PRIu64, info->max_opackets,
-                 info->rate_stats.opackets);
+        snprintf(buff, sizeof(buff), "%'" PRIu64 "/%'" PRIu64, pinfo->max_opackets,
+                 pinfo->rate_stats.opackets);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%" PRIu64 "/%" PRIu64, iBitsTotal(info->rate_stats) / Million,
-                 oBitsTotal(info->rate_stats) / Million);
+        snprintf(buff, sizeof(buff), "%'" PRIu64 "/%'" PRIu64,
+                 iBitsTotal(pinfo->rate_stats) / Million, oBitsTotal(pinfo->rate_stats) / Million);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        pktgen.cumm_rate_totals.ipackets += info->rate_stats.ipackets;
-        pktgen.cumm_rate_totals.opackets += info->rate_stats.opackets;
-        pktgen.cumm_rate_totals.ibytes += info->rate_stats.ibytes;
-        pktgen.cumm_rate_totals.obytes += info->rate_stats.obytes;
-        pktgen.cumm_rate_totals.ierrors += info->rate_stats.ierrors;
-        pktgen.cumm_rate_totals.oerrors += info->rate_stats.oerrors;
+        pktgen.cumm_rate_totals.ipackets += pinfo->rate_stats.ipackets;
+        pktgen.cumm_rate_totals.opackets += pinfo->rate_stats.opackets;
+        pktgen.cumm_rate_totals.ibytes += pinfo->rate_stats.ibytes;
+        pktgen.cumm_rate_totals.obytes += pinfo->rate_stats.obytes;
+        pktgen.cumm_rate_totals.ierrors += pinfo->rate_stats.ierrors;
+        pktgen.cumm_rate_totals.oerrors += pinfo->rate_stats.oerrors;
 
         if (pktgen.cumm_rate_totals.ipackets > pktgen.max_total_ipackets)
             pktgen.max_total_ipackets = pktgen.cumm_rate_totals.ipackets;
         if (pktgen.cumm_rate_totals.opackets > pktgen.max_total_opackets)
             pktgen.max_total_opackets = pktgen.cumm_rate_totals.opackets;
 
-        pktgen.cumm_rate_totals.imissed += info->rate_stats.imissed;
-        pktgen.cumm_rate_totals.rx_nombuf += info->rate_stats.rx_nombuf;
+        pktgen.cumm_rate_totals.imissed += pinfo->rate_stats.imissed;
+        pktgen.cumm_rate_totals.rx_nombuf += pinfo->rate_stats.rx_nombuf;
 
         row++;
 
         pktgen_display_set_color("stats.port.sizes");
-        snprintf(buff, sizeof(buff), "%" PRIu64 "/%" PRIu64, lat->min_cycles, lat->max_cycles);
+        snprintf(buff, sizeof(buff), "%'" PRIu64 "/%'" PRIu64, lat->min_cycles, lat->max_cycles);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%" PRIu64, lat->jitter_threshold_us);
+        snprintf(buff, sizeof(buff), "%'" PRIu64, lat->jitter_threshold_us);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%" PRIu64, lat->jitter_count);
+        snprintf(buff, sizeof(buff), "%'" PRIu64, lat->jitter_count);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%" PRIu64, info->prev_stats.ipackets);
+        snprintf(buff, sizeof(buff), "%'" PRIu64, pinfo->prev_stats.ipackets);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        if (info->prev_stats.ipackets)
-            snprintf(buff, sizeof(buff), "%" PRIu64,
-                     (lat->jitter_count * 100) / info->prev_stats.ipackets);
+        if (pinfo->prev_stats.ipackets)
+            snprintf(buff, sizeof(buff), "%'" PRIu64,
+                     (lat->jitter_count * 100) / pinfo->prev_stats.ipackets);
         else
-            snprintf(buff, sizeof(buff), "%" PRIu64, lat->avg_cycles);
+            snprintf(buff, sizeof(buff), "%'" PRIu64, lat->avg_cycles);
 
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
@@ -405,17 +401,17 @@ pktgen_page_rate(void)
                  rate->color_bits);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%d/%d", rate->payload, rate->overhead);
+        snprintf(buff, sizeof(buff), "%'d/%'d", rate->payload, rate->overhead);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%d/%ld Mbps", rate->bytes_per_vframe,
+        snprintf(buff, sizeof(buff), "%'d/%'ld Mbps", rate->bytes_per_vframe,
                  ((uint64_t)rate->bits_per_sec / Million));
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%d/%d", rate->pkts_per_vframe, rate->total_pkts_per_sec);
+        snprintf(buff, sizeof(buff), "%'d/%'d", rate->pkts_per_vframe, rate->total_pkts_per_sec);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
-        snprintf(buff, sizeof(buff), "%.2fus/%ld", rate->pps_rate * 1000000.0,
+        snprintf(buff, sizeof(buff), "%.2fus/%'ld", rate->pps_rate * 1000000.0,
                  rate->cycles_per_pkt);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
@@ -425,15 +421,15 @@ pktgen_page_rate(void)
     /* Display the total pkts/s for all ports */
     col = (COLUMN_WIDTH_1 * display_cnt) + COLUMN_WIDTH_0;
     row = LINK_STATE_ROW + 1;
-    snprintf(buff, sizeof(buff), "%lu/%lu", pktgen.max_total_ipackets,
+    snprintf(buff, sizeof(buff), "%'lu/%'lu", pktgen.max_total_ipackets,
              pktgen.cumm_rate_totals.ipackets);
     scrn_printf(row++, col, "%*s", COLUMN_WIDTH_3, buff);
     scrn_eol();
-    snprintf(buff, sizeof(buff), "%lu/%lu", pktgen.max_total_opackets,
+    snprintf(buff, sizeof(buff), "%'lu/%'lu", pktgen.max_total_opackets,
              pktgen.cumm_rate_totals.opackets);
     scrn_printf(row++, col, "%*s", COLUMN_WIDTH_3, buff);
     scrn_eol();
-    snprintf(buff, sizeof(buff), "%lu/%lu", iBitsTotal(pktgen.cumm_rate_totals) / Million,
+    snprintf(buff, sizeof(buff), "%'lu/%'lu", iBitsTotal(pktgen.cumm_rate_totals) / Million,
              oBitsTotal(pktgen.cumm_rate_totals) / Million);
     scrn_printf(row++, col, "%*s", COLUMN_WIDTH_3, buff);
     scrn_eol();

@@ -14,10 +14,10 @@ extern "C" {
 
 /**
  *
- * pktgen_cpu_init - Init the CPU information
+ * pktgen_config_init - Init the configuration information
  *
  * DESCRIPTION
- * initialize the CPU information
+ * initialize the configuration information
  *
  * RETURNS: N/A
  *
@@ -28,10 +28,10 @@ void pktgen_cpu_init(void);
 
 /**
  *
- * pktgen_page_cpu - Display the CPU data page.
+ * pktgen_page_cfg - Display the CPU page.
  *
  * DESCRIPTION
- * Display the CPU data page for a given port.
+ * Display the CPU page for a given port.
  *
  * RETURNS: N/A
  *
@@ -43,13 +43,14 @@ void pktgen_page_cpu(void);
 static inline uint8_t
 sct(uint8_t s, uint8_t c, uint8_t t)
 {
-    lc_info_t *lc = &pktgen.core_info[0];
-    uint8_t i;
+    lc_info_t *lc;
 
-    for (i = 0; i < pktgen.core_cnt; i++, lc++)
+    for (int i = 0; i < coremap_core_cnt(); i++) {
+        lc = coremap_get(i);
+
         if (lc->s.socket_id == s && lc->s.core_id == c && lc->s.thread_id == t)
             return lc->s.id;
-
+    }
     return 0;
 }
 

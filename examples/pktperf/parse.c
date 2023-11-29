@@ -136,30 +136,34 @@ parse_cores(l2p_port_t *port, const char *cores, int mode)
             rte_exit(EXIT_FAILURE, "invalid port mode\n");
             break;
         }
-        DBG_PRINT("lcore %u is in Rx %u Tx %u\n", l, port->num_rx_qids, port->num_tx_qids);
 
         DBG_PRINT("lcore: %u port: %u qid: %u/%u name:'%s'\n", lport->lid, port->pid, lport->rx_qid,
                   lport->tx_qid, name);
 
-        /* Create the Rx mbuf pool one per lcore/port/queue */
-        snprintf(name, sizeof(name), "rx-%u/%u/%u:%u", lport->lid, port->pid, lport->rx_qid,
-                 lport->tx_qid);
-        port->rx_mp =
-            rte_pktmbuf_pool_create(name, info->mbuf_count, MEMPOOL_CACHE_SIZE, 0,
-                                    RTE_MBUF_DEFAULT_BUF_SIZE, rte_eth_dev_socket_id(port->pid));
-        if (port->rx_mp == NULL)
-            rte_exit(EXIT_FAILURE, "Can't initialize Rx mbuf pool for lcore/port/queues %s\n",
-                     name);
+        if (port->rx_mp == NULL) {
+            printf("Creating Rx mbuf pool for lcore %u, port %u\n", l, port->pid);
 
-        /* Create the Tx mbuf pool pne per lcore/port/queue */
-        snprintf(name, sizeof(name), "tx-%u/%u/%u:%u", lport->lid, port->pid, lport->rx_qid,
-                 lport->tx_qid);
-        port->tx_mp =
-            rte_pktmbuf_pool_create(name, info->mbuf_count, MEMPOOL_CACHE_SIZE, 0,
-                                    RTE_MBUF_DEFAULT_BUF_SIZE, rte_eth_dev_socket_id(port->pid));
-        if (port->tx_mp == NULL)
-            rte_exit(EXIT_FAILURE, "Can't initialize Tx mbuf pool for lcore/port/queues %s\n",
-                     name);
+            /* Create the Rx mbuf pool one per lcore/port */
+            snprintf(name, sizeof(name), "rx-%u/%u", lport->lid, port->pid);
+            port->rx_mp = rte_pktmbuf_pool_create(name, info->mbuf_count, MEMPOOL_CACHE_SIZE, 0,
+                                                  RTE_MBUF_DEFAULT_BUF_SIZE,
+                                                  rte_eth_dev_socket_id(port->pid));
+            if (port->rx_mp == NULL)
+                rte_exit(EXIT_FAILURE, "Can't initialize Rx mbuf pool for lcore/port/queues %s\n",
+                         name);
+        }
+        if (port->tx_mp == NULL) {
+            printf("Creating Tx mbuf pool for lcore %u, port %u\n", l, port->pid);
+
+            /* Create the Tx mbuf pool pne per lcore/port/queue */
+            snprintf(name, sizeof(name), "tx-%u/%u", lport->lid, port->pid);
+            port->tx_mp = rte_pktmbuf_pool_create(name, info->mbuf_count, MEMPOOL_CACHE_SIZE, 0,
+                                                  RTE_MBUF_DEFAULT_BUF_SIZE,
+                                                  rte_eth_dev_socket_id(port->pid));
+            if (port->tx_mp == NULL)
+                rte_exit(EXIT_FAILURE, "Can't initialize Tx mbuf pool for lcore/port/queues %s\n",
+                         name);
+        }
     } while (l++ < h);
 
     DBG_PRINT("num_cores: %d\n", num_cores);

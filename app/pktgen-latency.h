@@ -33,19 +33,19 @@ void pktgen_page_latency(void);
  *
  * RETURNS: N/A
  */
-void pktgen_latency_setup(port_info_t *info);
+void pktgen_latency_setup(port_info_t *pinfo);
 
 /**
  * latency_set_rate - Set the latency rate for a given port.
  */
-void latency_set_rate(port_info_t *info, uint32_t value);
+void latency_set_rate(port_info_t *pinfo, uint32_t value);
 
 /**
  * latency_set_entropy - Set the entropy value for a given port.
  *
  * value - The entropy value can be 0 >= entropy <= 0xFFFF default to 0.
  */
-void latency_set_entropy(port_info_t *info, uint16_t value);
+void latency_set_entropy(port_info_t *pinfo, uint16_t value);
 
 #ifdef __cplusplus
 }

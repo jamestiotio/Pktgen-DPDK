@@ -22,11 +22,11 @@ typedef struct {
 
 #define RATE_MAGIC (('R' << 8) + 'y')
 
-void pktgen_rate_init(port_info_t *info);
+void pktgen_rate_init(port_info_t *pinfo);
 void pktgen_page_rate(void);
-void rate_set_value(port_info_t *info, const char *what, uint32_t value);
-void update_rate_values(port_info_t *info);
-void pktgen_rate_setup(port_info_t *info);
+void rate_set_value(port_info_t *pinfo, const char *what, uint32_t value);
+void update_rate_values(port_info_t *pinfo);
+void pktgen_rate_setup(port_info_t *pinfo);
 
 #ifdef __cplusplus
 }
