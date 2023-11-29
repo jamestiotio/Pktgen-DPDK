@@ -205,7 +205,7 @@ my_getline(char **line, size_t *line_sz, int fd)
     if (*line == NULL) {
         if (*line_sz == 0)
             *line_sz = MAX_LINE_SIZE;
-        l = malloc(*line_sz);
+        l = calloc(1, *line_sz);
         if (l == NULL)
             return -1;
         *line = l;
@@ -239,7 +239,7 @@ cmap_create(void)
 
     memset(lcore_info, '\0', sizeof(lcore_info));
 
-    cmap = malloc(sizeof(struct cmap));
+    cmap = calloc(1, sizeof(struct cmap));
     if (!cmap)
         return NULL;
 

@@ -42,20 +42,6 @@ pktgen_data_field(struct rte_mbuf *m)
     return RTE_MBUF_DYNFIELD(m, pktgen_dynfield_offset, union pktgen_data *);
 }
 
-static inline void
-pktmbuf_restore(struct rte_mbuf *m)
-{
-    union pktgen_data d;
-
-    d = *pktgen_data_field(m); /* Save the original value */
-
-    rte_pktmbuf_reset(m);
-
-    m->data_len = d.data_len;
-    m->pkt_len  = d.pkt_len;
-    m->buf_len  = d.buf_len;
-}
-
 /**
  * Allocate a bulk of mbufs, initialize refcnt and reset the fields to default
  * values.
@@ -69,10 +55,9 @@ pktmbuf_restore(struct rte_mbuf *m)
  *  @return
  *   - 0: Success
  */
-static inline int
+static inline unsigned
 pg_pktmbuf_alloc_bulk(struct rte_mempool *pool, struct rte_mbuf **mbufs, unsigned count)
 {
-    unsigned idx;
     int rc;
 
     if (count == 0)
@@ -81,45 +66,17 @@ pg_pktmbuf_alloc_bulk(struct rte_mempool *pool, struct rte_mbuf **mbufs, unsigne
     rc = rte_mempool_get_bulk(pool, (void **)mbufs, count);
     if (unlikely(rc)) {
         struct rte_mbuf *m;
+        unsigned idx;
 
         for (idx = 0; idx < count; idx++) {
             rc = rte_mempool_get(pool, (void **)&m);
             if (unlikely(rc))
                 break;
-            pktmbuf_restore(m);
             mbufs[idx] = m;
         }
         return idx;
     }
-
-    /* To understand duff's device on loop unwinding optimization, see
-     * https://en.wikipedia.org/wiki/Duff's_device.
-     * Here while() loop is used rather than do() while{} to avoid extra
-     * check if count is zero.
-     */
-    idx = 0;
-    switch (count % 4) {
-    case 0:
-        while (idx != count) {
-            pktmbuf_restore(mbufs[idx]);
-            idx++;
-            /* fall-through */
-        case 3:
-            pktmbuf_restore(mbufs[idx]);
-            idx++;
-            /* fall-through */
-        case 2:
-            pktmbuf_restore(mbufs[idx]);
-            idx++;
-            /* fall-through */
-        case 1:
-            pktmbuf_restore(mbufs[idx]);
-            idx++;
-            /* fall-through */
-        }
-    }
-
-    return idx;
+    return count;
 }
 
 /**

@@ -27,9 +27,13 @@
 #include <getopt.h>
 #include <stdint.h>
 
+#include <rte_common.h>
+
 #include "coremap.h"
 
 static char *model_name;
+static lc_info_t core_info[RTE_MAX_LCORE]; /**< Core information */
+static int core_cnt;                       /**< Number of cores */
 
 typedef struct lcore {
     struct lcore *next;
@@ -326,18 +330,28 @@ count_cores(lcore_t *lcores)
 }
 
 int
-coremap(const char *arg, lc_info_t *get_lcores, int max_cnt, const char *proc_cpuinfo)
+coremap_core_cnt(void)
+{
+    return core_cnt;
+}
+
+lc_info_t *
+coremap_get(int idx)
+{
+    return &core_info[idx];
+}
+
+int
+coremap(const char *arg)
 {
     FILE *f;
-    char *line         = NULL;
-    size_t line_sz     = 0;
-    unsigned print_map = 0;
-    unsigned balanced  = 1;
-    unsigned mode      = 0;
-    lcore_t *lcores    = NULL;
-
-    if (proc_cpuinfo == NULL)
-        proc_cpuinfo = PROC_CPUINFO;
+    char *line               = NULL;
+    size_t line_sz           = 0;
+    unsigned print_map       = 0;
+    unsigned balanced        = 1;
+    unsigned mode            = 0;
+    lcore_t *lcores          = NULL;
+    const char *proc_cpuinfo = PROC_CPUINFO;
 
     if ((f = fopen(proc_cpuinfo, "r")) == NULL) {
         fprintf(stderr, "Cannot open %s on this system\n", proc_cpuinfo);
@@ -372,8 +386,8 @@ coremap(const char *arg, lc_info_t *get_lcores, int max_cnt, const char *proc_cp
             balanced = 0;
         } else if (strcmp(arg, "array") == 0) {
             int num_cores = count_cores(lcores);
-            if ((get_lcores != NULL) || (max_cnt > 0))
-                get_and_free_lcores(lcores, &get_lcores[0], max_cnt);
+
+            get_and_free_lcores(lcores, core_info, num_cores);
             return num_cores;
         }
     }
@@ -423,15 +437,25 @@ _get_lcore_id(const lc_info_t *lc)
  * returned by the function 'get'
  */
 unsigned
-coremap_cnt(const lc_info_t *lc, unsigned max_cnt, unsigned t)
+coremap_cnt(unsigned typ)
 {
     _getter_fn get;
     _getter_fn _type[] = {_get_socket_id, _get_core_id, _get_thread_id, _get_lcore_id, NULL};
-    unsigned cnt       = 0, i;
+    unsigned cnt       = 0;
 
-    get = _type[t];
-    for (i = 0; i < max_cnt; i++, lc++)
+    get = _type[typ];
+    for (int i = 0; i < coremap_core_cnt(); i++) {
+        lc_info_t *lc = coremap_get(i);
+
         if (cnt < get(lc))
             cnt = get(lc);
+    }
     return cnt + 1;
+}
+
+RTE_INIT(coremap_init)
+{
+
+    memset(&core_info, 0xff, sizeof(core_info));
+    coremap("array");
 }

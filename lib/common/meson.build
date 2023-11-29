@@ -6,10 +6,8 @@ sources = files(
 	'lscpu.c',
 	'utils.c',
 	'coremap.c',
-	'pg_pcap.c',
 	'pg_strings.c',
 	'cksum.c',
-	'l2p.c'
 )
 libcommon = library('common', sources,
 	dependencies: dpdk)

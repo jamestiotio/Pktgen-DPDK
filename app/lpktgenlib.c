@@ -2856,7 +2856,7 @@ pktgen_blink(lua_State *L)
  */
 
 static void
-isSending(lua_State *L, port_info_t *info)
+isSending(lua_State *L, port_info_t *pinfo)
 {
     lua_pushinteger(L, info->pid); /* Push the table index */
     lua_pushstring(L, pktgen_port_transmitting(info->pid) ? "y" : "n");
@@ -2916,7 +2916,7 @@ pktgen_isSending(lua_State *L)
  */
 
 static void
-link_state(lua_State *L, port_info_t *info)
+link_state(lua_State *L, port_info_t *pinfo)
 {
     char buff[32];
 
@@ -2978,7 +2978,7 @@ pktgen_linkState(lua_State *L)
  */
 
 static void
-pkt_sizes(lua_State *L, port_info_t *info)
+pkt_sizes(lua_State *L, port_info_t *pinfo)
 {
     pkt_sizes_t sizes = {0};
 
@@ -3053,7 +3053,7 @@ pktgen_portSizes(lua_State *L)
  */
 
 static void
-pkt_stats(lua_State *L, port_info_t *info)
+pkt_stats(lua_State *L, port_info_t *pinfo)
 {
     struct rte_ether_addr ethaddr;
     char mac_buf[32]  = {0};
@@ -3158,9 +3158,9 @@ pktgen_pktStats(lua_State *L)
  */
 
 static void
-port_stats(lua_State *L, port_info_t *info, char *type)
+port_stats(lua_State *L, port_info_t *pinfo, char *type)
 {
-    eth_stats_t stats = {0};
+    struct rte_eth_stats stats = {0};
 
     pktgen_port_stats(info->pid, type, &stats);
 
@@ -3241,10 +3241,10 @@ pktgen_portStats(lua_State *L)
  */
 
 static void
-port_info(lua_State *L, port_info_t *info)
+port_info(lua_State *L, port_info_t *pinfo)
 {
     struct rte_eth_dev_info dev = {0};
-    eth_stats_t stats           = {0};
+    struct rte_eth_stats stats  = {0};
     pkt_stats_t pkt_stats       = {0};
     pkt_sizes_t sizes           = {0};
     pkt_seq_t *pkt;
@@ -3337,7 +3337,7 @@ port_info(lua_State *L, port_info_t *info)
         setf_integer(L, "tx_count", rte_atomic64_read(&info->transmit_count));
     setf_integer(L, "tx_rate", info->tx_rate);
 
-    setf_integer(L, "pkt_size", pkt->pktSize + RTE_ETHER_CRC_LEN);
+    setf_integer(L, "pkt_size", pkt->pkt_size + RTE_ETHER_CRC_LEN);
     setf_integer(L, "tx_burst", info->tx_burst);
     setf_integer(L, "rx_burst", info->rx_burst);
 
@@ -3587,7 +3587,7 @@ pktgen_rnd(lua_State *L)
 }
 
 static void
-add_rnd_pattern(lua_State *L, port_info_t *info)
+add_rnd_pattern(lua_State *L, port_info_t *pinfo)
 {
     uint32_t i, curr_bit, idx;
     char mask[36]; /* 4*8 bits, 3 delimiter spaces, \0 */
@@ -4059,8 +4059,8 @@ luaopen_pktgen(lua_State *L)
     setf_integer(L, "numSeqPkts", NUM_SEQ_PKTS);
     setf_integer(L, "numTotalPkts", NUM_TOTAL_PKTS);
 
-    setf_integer(L, "minPktSize", pktgen.eth_min_pkt);
-    setf_integer(L, "maxPktSize", pktgen.eth_max_pkt);
+    setf_integer(L, "minPktSize", pktgen.min_pkt_size);
+    setf_integer(L, "maxPktSize", pktgen.max_pkt_size);
     setf_integer(L, "minVlanID", MIN_VLAN_ID);
     setf_integer(L, "maxVlanID", MAX_VLAN_ID);
     setf_integer(L, "vlanTagSize", VLAN_TAG_SIZE);

@@ -177,15 +177,15 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
                 pkt->tos = range->tos;
 
             if (unlikely(range->pkt_size_inc != 0)) {
-                uint32_t p = pkt->pktSize;
+                uint32_t p = pkt->pkt_size;
                 p += range->pkt_size_inc;
                 if (p < range->pkt_size_min)
                     p = range->pkt_size_max;
                 else if (p > range->pkt_size_max)
                     p = range->pkt_size_min;
-                pkt->pktSize = p;
+                pkt->pkt_size = p;
             } else
-                pkt->pktSize = range->pkt_size;
+                pkt->pkt_size = range->pkt_size;
 
             if (unlikely(range->src_mac_inc != 0)) {
                 uint64_t p;
@@ -367,15 +367,15 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
                 pkt->traffic_class = range->traffic_class;
 
             if (unlikely(range->pkt_size_inc != 0)) {
-                uint32_t p = pkt->pktSize;
+                uint32_t p = pkt->pkt_size;
                 p += range->pkt_size_inc;
                 if (p < range->pkt_size_min)
                     p = range->pkt_size_max;
                 else if (p > range->pkt_size_max)
                     p = range->pkt_size_min;
-                pkt->pktSize = p;
+                pkt->pkt_size = p;
             } else
-                pkt->pktSize = range->pkt_size;
+                pkt->pkt_size = range->pkt_size;
 
             if (unlikely(range->src_mac_inc != 0)) {
                 uint64_t p;
@@ -434,7 +434,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 static void
 pktgen_print_range(void)
 {
-    port_info_t *info;
+    port_info_t *pinfo;
     range_info_t *range;
     uint32_t pid, col, sp;
     char buff[32];
@@ -443,15 +443,11 @@ pktgen_print_range(void)
     struct rte_ether_addr eaddr;
     char str[64];
 
-    pktgen_display_set_color("top.page");
-    display_topline("<Range Page>");
-
-    pktgen_display_set_color("top.ports");
-    scrn_printf(1, 3, "Ports %d-%d of %d", pktgen.starting_port, (pktgen.ending_port - 1),
-                pktgen.nb_ports);
+    display_topline("<Range Page>", pktgen.starting_port, (pktgen.ending_port - 1),
+                    pktgen.nb_ports);
 
     pktgen_display_set_color("stats.stat.label");
-    row = PORT_STATE_ROW;
+    row = PORT_FLAGS_ROW;
     scrn_printf(row++, 1, "%-*s", col_0, "Port #");
     scrn_printf(row++, 1, "%-*s", col_0, "IP.proto");
 
@@ -505,14 +501,13 @@ pktgen_print_range(void)
 
     sp = pktgen.starting_port;
     for (pid = 0; pid < pktgen.nb_ports_per_page; pid++) {
-        if (get_map(pktgen.l2p, pid + sp, RTE_MAX_LCORE) == 0)
+        pinfo = l2p_get_port_pinfo(pid + sp);
+        if (pinfo == NULL)
             continue;
-
-        info = &pktgen.info[pid + sp];
 
         /* Display Port information Src/Dest IP addr, Netmask, Src/Dst MAC addr */
         col = (col_1 * pid) + col_0;
-        row = PORT_STATE_ROW;
+        row = PORT_FLAGS_ROW;
 
         pktgen_display_set_color("stats.stat.label");
         /* Display the port number for the column */
@@ -520,11 +515,11 @@ pktgen_print_range(void)
         scrn_printf(row++, col, "%*s", col_1, buff);
 
         pktgen_display_set_color("stats.stat.values");
-        range = &info->range;
+        range = &pinfo->range;
 
         scrn_printf(row++, col, "%*s", col_1, (range->ip_proto == PG_IPPROTO_TCP) ? "TCP" : "UDP");
 
-        if (info->seq_pkt[RANGE_PKT].ethType == RTE_ETHER_TYPE_IPV6) {
+        if (pinfo->seq_pkt[RANGE_PKT].ethType == RTE_ETHER_TYPE_IPV6) {
             row++;
             scrn_printf(
                 row++, col, "%*s", col_1,
@@ -583,7 +578,7 @@ pktgen_print_range(void)
                  range->src_port_max, range->src_port_inc);
         scrn_printf(row++, col, "%*s", col_1, str);
 
-        info->seq_pkt[RANGE_PKT].ethType == RTE_ETHER_TYPE_IPV6
+        pinfo->seq_pkt[RANGE_PKT].ethType == RTE_ETHER_TYPE_IPV6
             ? snprintf(str, sizeof(str), "%5d:%5d/%5d/%5d", range->hop_limits,
                        range->hop_limits_min, range->hop_limits_max, range->hop_limits_inc)
             : snprintf(str, sizeof(str), "%5d:%5d/%5d/%5d", range->ttl, range->ttl_min,
@@ -598,7 +593,7 @@ pktgen_print_range(void)
                  range->cos_inc);
         scrn_printf(row++, col, "%*s", col_1, str);
 
-        info->seq_pkt[RANGE_PKT].ethType == RTE_ETHER_TYPE_IPV6
+        pinfo->seq_pkt[RANGE_PKT].ethType == RTE_ETHER_TYPE_IPV6
             ? snprintf(str, sizeof(str), "%5d:%5d/%5d/%5d", range->traffic_class,
                        range->traffic_class_min, range->traffic_class_max, range->traffic_class_inc)
             : snprintf(str, sizeof(str), "%5d:%5d/%5d/%5d", range->tos, range->tos_min,
@@ -695,89 +690,89 @@ pktgen_page_range(void)
  */
 
 void
-pktgen_range_setup(port_info_t *info)
+pktgen_range_setup(port_info_t *pinfo)
 {
-    range_info_t *range = &info->range;
+    range_info_t *range = &pinfo->range;
 
-    range->ip_proto = info->seq_pkt[SINGLE_PKT].ipProto;
+    range->ip_proto = pinfo->seq_pkt[SINGLE_PKT].ipProto;
 
-    range->dst_ip     = IPv4(192, 168, info->pid + 1, 1);
-    range->dst_ip_min = IPv4(192, 168, info->pid + 1, 1);
-    range->dst_ip_max = IPv4(192, 168, info->pid + 1, 254);
+    range->dst_ip     = IPv4(192, 168, pinfo->pid + 1, 1);
+    range->dst_ip_min = IPv4(192, 168, pinfo->pid + 1, 1);
+    range->dst_ip_max = IPv4(192, 168, pinfo->pid + 1, 254);
     range->dst_ip_inc = 0x00000001;
 
-    range->src_ip     = IPv4(192, 168, info->pid, 1);
-    range->src_ip_min = IPv4(192, 168, info->pid, 1);
-    range->src_ip_max = IPv4(192, 168, info->pid, 254);
+    range->src_ip     = IPv4(192, 168, pinfo->pid, 1);
+    range->src_ip_min = IPv4(192, 168, pinfo->pid, 1);
+    range->src_ip_max = IPv4(192, 168, pinfo->pid, 254);
     range->src_ip_inc = 0x00000000;
 
-    range->dst_port     = info->seq_pkt[SINGLE_PKT].dport;
+    range->dst_port     = pinfo->seq_pkt[SINGLE_PKT].dport;
     range->dst_port_inc = 0x0001;
     range->dst_port_min = 0;
     range->dst_port_max = 65535;
 
-    range->src_port     = info->seq_pkt[SINGLE_PKT].sport;
+    range->src_port     = pinfo->seq_pkt[SINGLE_PKT].sport;
     range->src_port_inc = 0x0001;
     range->src_port_min = 0;
     range->src_port_max = 65535;
 
-    range->ttl     = info->seq_pkt[SINGLE_PKT].ttl;
+    range->ttl     = pinfo->seq_pkt[SINGLE_PKT].ttl;
     range->ttl_inc = 0;
     range->ttl_min = 0;
     range->ttl_max = 255;
 
-    range->vlan_id     = info->seq_pkt[SINGLE_PKT].vlanid;
+    range->vlan_id     = pinfo->seq_pkt[SINGLE_PKT].vlanid;
     range->vlan_id_inc = 0;
     range->vlan_id_min = MIN_VLAN_ID;
     range->vlan_id_max = MAX_VLAN_ID;
 
-    range->cos     = info->seq_pkt[SINGLE_PKT].cos;
+    range->cos     = pinfo->seq_pkt[SINGLE_PKT].cos;
     range->cos_inc = 0;
     range->cos_min = MIN_COS;
     range->cos_max = MAX_COS;
 
-    range->tos     = info->seq_pkt[SINGLE_PKT].tos;
+    range->tos     = pinfo->seq_pkt[SINGLE_PKT].tos;
     range->tos_inc = 0;
     range->tos_min = MIN_TOS;
     range->tos_max = MAX_TOS;
 
-    range->pkt_size     = MIN_PKT_SIZE;
+    range->pkt_size     = RTE_ETHER_MIN_LEN;
     range->pkt_size_inc = 0;
-    range->pkt_size_min = MIN_PKT_SIZE;
-    range->pkt_size_max = MAX_PKT_SIZE;
+    range->pkt_size_min = RTE_ETHER_MIN_LEN;
+    range->pkt_size_max = RTE_ETHER_MAX_LEN;
 
-    range->vxlan_gid     = info->seq_pkt[SINGLE_PKT].group_id;
+    range->vxlan_gid     = pinfo->seq_pkt[SINGLE_PKT].group_id;
     range->vxlan_gid_inc = 0;
     range->vxlan_gid_min = 0;
     range->vxlan_gid_max = 65535;
 
-    range->vxlan_vid     = info->seq_pkt[SINGLE_PKT].vxlan_id;
+    range->vxlan_vid     = pinfo->seq_pkt[SINGLE_PKT].vxlan_id;
     range->vxlan_vid_inc = 0;
     range->vxlan_vid_min = 0;
     range->vxlan_vid_max = 65535; /* Should be 24 bits */
 
-    range->vni_flags = info->vni_flags;
+    range->vni_flags = pinfo->vni_flags;
 
-    range->tcp_flags = info->seq_pkt[SINGLE_PKT].tcp_flags;
+    range->tcp_flags = pinfo->seq_pkt[SINGLE_PKT].tcp_flags;
 
-    range->tcp_seq     = info->seq_pkt[SINGLE_PKT].tcp_seq;
+    range->tcp_seq     = pinfo->seq_pkt[SINGLE_PKT].tcp_seq;
     range->tcp_seq_inc = 0;
     range->tcp_seq_min = 0;
     range->tcp_seq_max = MAX_TCP_SEQ_NUMBER;
 
-    range->tcp_ack     = info->seq_pkt[SINGLE_PKT].tcp_ack;
+    range->tcp_ack     = pinfo->seq_pkt[SINGLE_PKT].tcp_ack;
     range->tcp_ack_inc = 0;
     range->tcp_ack_min = 0;
     range->tcp_ack_max = MAX_TCP_ACK_NUMBER;
 
-    info->seq_pkt[RANGE_PKT].pktSize = MIN_PKT_SIZE;
+    pinfo->seq_pkt[RANGE_PKT].pkt_size = RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN;
 
-    inet_mtoh64(&info->seq_pkt[SINGLE_PKT].eth_dst_addr, &range->dst_mac);
+    inet_mtoh64(&pinfo->seq_pkt[SINGLE_PKT].eth_dst_addr, &range->dst_mac);
     memset(&range->dst_mac_inc, 0, sizeof(range->dst_mac_inc));
     memset(&range->dst_mac_min, 0, sizeof(range->dst_mac_min));
     memset(&range->dst_mac_max, 0, sizeof(range->dst_mac_max));
 
-    inet_mtoh64(&info->seq_pkt[SINGLE_PKT].eth_src_addr, &range->src_mac);
+    inet_mtoh64(&pinfo->seq_pkt[SINGLE_PKT].eth_src_addr, &range->src_mac);
     memset(&range->src_mac_inc, 0, sizeof(range->src_mac_inc));
     memset(&range->src_mac_min, 0, sizeof(range->src_mac_min));
     memset(&range->src_mac_max, 0, sizeof(range->src_mac_max));

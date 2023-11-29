@@ -552,8 +552,6 @@ pktsize_enter_callback(GtkWidget *widget, gpointer *data)
 
         return;
     }
-
-    pktgen_packet_rate(info);
 }
 
 /**
@@ -865,7 +863,7 @@ set_stream_info(unsigned int pid, unsigned int seq_id)
     pktgen_packet_ctor(info, seq_id, -1);
 
     /* Fill in the pattern for L4 and payload space. */
-    usr_def = (uint8_t *)&pkt->hdr;
+    usr_def = (uint8_t *)pkt->hdr;
 
     ascii_to_number(usr_def_str, l4_and_payload, strlen(usr_def_str));
     for (i = 0; i < strlen(usr_def_str) / 2; i++)
@@ -1023,7 +1021,7 @@ stream_box(void)
     gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 5);
 
     for (pid = 0; pid < RTE_MAX_ETHPORTS; pid++) {
-        cnt.rxtx = get_map(pktgen.l2p, pid, RTE_MAX_LCORE);
+        cnt.rxtx = get_map(pid, RTE_MAX_LCORE);
         if (cnt.rxtx == 0)
             continue;
 

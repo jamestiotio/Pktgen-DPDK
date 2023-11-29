@@ -100,7 +100,7 @@ fill_chassis_info(void)
     chassis_store(toplevel, "[127.0.0.1]");
 
     for (pid = 0; pid < RTE_MAX_ETHPORTS; pid++) {
-        cnt.rxtx = get_map(pktgen.l2p, pid, RTE_MAX_LCORE);
+        cnt.rxtx = get_map(pid, RTE_MAX_LCORE);
         if (cnt.rxtx == 0)
             continue;
 
@@ -287,13 +287,13 @@ update_port_statistics(void *arg)
     GtkTreeIter toplevel;
     GtkTreeIter totToplevel;
     rxtx_t cnt;
-    eth_stats_t tot_stats = {0};
+    struct rte_eth_stats tot_stats = {0};
 
     if (pktgen.is_gui_running == FALSE)
         return TRUE;
 
     for (pid = 0; pid < RTE_MAX_ETHPORTS; pid++) {
-        cnt.rxtx = get_map(pktgen.l2p, pid, RTE_MAX_LCORE);
+        cnt.rxtx = get_map(pid, RTE_MAX_LCORE);
         if (cnt.rxtx == 0)
             continue;
 
@@ -1146,7 +1146,7 @@ show_static_conf(void)
 
     /* Create columns of statistics for selected ports on the table */
     for (pid = 0; pid < RTE_MAX_ETHPORTS; pid++) {
-        cnt.rxtx = get_map(pktgen.l2p, pid, RTE_MAX_LCORE);
+        cnt.rxtx = get_map(pid, RTE_MAX_LCORE);
         if (cnt.rxtx == 0)
             continue;
 
@@ -1223,7 +1223,7 @@ show_statistics(void)
 
     /* Create columns of statistics for selected ports on the table */
     for (pid = 0; pid < RTE_MAX_ETHPORTS; pid++) {
-        cnt.rxtx = get_map(pktgen.l2p, pid, RTE_MAX_LCORE);
+        cnt.rxtx = get_map(pid, RTE_MAX_LCORE);
         if (cnt.rxtx == 0)
             continue;
 

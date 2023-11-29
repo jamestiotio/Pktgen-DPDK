@@ -40,60 +40,91 @@ mbuf_iterate_cb(struct rte_mempool *mp, void *opaque, void *obj, unsigned obj_id
     m->ol_flags = 0;
 }
 
+static __inline__ void
+do_rx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint32_t n_mbufs)
+{
+    l2p_port_t *port = lport->port;
+    qstats_t *c;
+    uint16_t nb_pkts, rx_qid;
+
+    rx_qid = lport->rx_qid;
+    c      = &port->pq[rx_qid].curr;
+
+    /* drain the RX queue */
+    nb_pkts = rte_eth_rx_burst(port->pid, rx_qid, mbufs, n_mbufs);
+    if (nb_pkts) {
+        for (uint16_t i = 0; i < nb_pkts; i++)
+            c->q_ibytes[rx_qid] += rte_pktmbuf_pkt_len(mbufs[i]);
+        c->q_ipackets[rx_qid] += nb_pkts;
+
+        rte_pktmbuf_free_bulk(mbufs, nb_pkts);
+    }
+}
+
+static __inline__ void
+do_tx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint32_t n_mbufs, uint64_t curr_tsc)
+{
+    l2p_port_t *port = lport->port;
+    struct rte_mempool *mp;
+    qstats_t *c;
+    uint16_t nb_pkts, pid, tx_qid;
+
+    pid    = port->pid;
+    tx_qid = lport->tx_qid;
+    c      = &port->pq[tx_qid].curr;
+    mp     = lport->port->tx_mp;
+
+    if (rte_mempool_get_bulk(mp, (void **)mbufs, n_mbufs) == 0) {
+        uint16_t plen = info->pkt_size - RTE_ETHER_CRC_LEN;
+
+        nb_pkts = rte_eth_tx_burst(pid, tx_qid, mbufs, info->burst_count);
+        if (unlikely(nb_pkts != info->burst_count)) {
+            rte_pktmbuf_free_bulk(&mbufs[nb_pkts], info->burst_count - nb_pkts);
+            c->q_tx_drops[tx_qid] += info->burst_count - nb_pkts;
+            return;
+        }
+        c->q_opackets[tx_qid] += nb_pkts;
+        c->q_obytes[tx_qid] += (nb_pkts * plen); /* does not include FCS */
+
+        c->q_tx_time[tx_qid] = rte_rdtsc() - curr_tsc;
+    } else
+        c->q_no_mbufs[tx_qid]++;
+}
+
 /* main processing loop */
 static void
 rx_loop(void)
 {
-    unsigned lcore_id = rte_lcore_id();
     l2p_lport_t *lport;
-    l2p_port_t *port;
-    uint16_t rx_burst_count = info->burst_count * 2;
-    struct rte_mbuf *rx_mbufs[rx_burst_count];
-    qstats_t *c;
-    uint16_t pid, rx_qid;
-    uint16_t nb_pkts;
+    uint16_t burst_count = info->burst_count * 2; /* drain Rx at twice the Tx burst count */
+    struct rte_mbuf *rx_mbufs[burst_count];
 
-    lport  = info->lports[lcore_id];
-    port   = lport->port;
-    pid    = port->pid;
-    rx_qid = lport->rx_qid;
-    c      = &port->pq[rx_qid].curr;
+    lport = info->lports[rte_lcore_id()];
 
-    DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u\n", lcore_id, port->pid, rx_qid);
+    DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u\n", rte_lcore_id(), lport->port->pid,
+              lport->rx_qid);
 
-    while (!info->force_quit) {
-        /* drain the RX queue */
-        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, rx_burst_count);
-        for (uint16_t i = 0; i < nb_pkts; i++)
-            c->q_ibytes[rx_qid] += rte_pktmbuf_pkt_len(rx_mbufs[i]);
-        c->q_ipackets[rx_qid] += nb_pkts;
-        if (nb_pkts)
-            rte_pktmbuf_free_bulk(rx_mbufs, nb_pkts);
-    }
-    DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u\n", lcore_id, pid, rx_qid);
+    while (!info->force_quit)
+        do_rx_process(lport, rx_mbufs, burst_count);
+
+    DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u\n", rte_lcore_id(), lport->port->pid,
+              lport->rx_qid);
 }
 
 static void
 tx_loop(void)
 {
-    unsigned lcore_id = rte_lcore_id();
     l2p_lport_t *lport;
     l2p_port_t *port;
-    struct rte_mbuf *tx_mbufs[info->burst_count];
-    struct rte_mempool *tx_mp;
-    qstats_t *c;
-    uint16_t pid, tx_qid;
-    uint16_t nb_pkts;
+    uint16_t burst_count = info->burst_count;
+    struct rte_mbuf *mbufs[burst_count];
     uint64_t curr_tsc, burst_tsc;
 
-    lport  = info->lports[lcore_id];
-    port   = lport->port;
-    pid    = port->pid;
-    tx_qid = lport->tx_qid;
-    c      = &port->pq[tx_qid].curr;
-    tx_mp  = port->tx_mp;
+    lport = info->lports[rte_lcore_id()];
+    port  = lport->port;
 
-    DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u\n", lcore_id, port->pid, tx_qid);
+    DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u\n", rte_lcore_id(), port->pid,
+              lport->tx_qid);
 
     rte_spinlock_lock(&port->tx_lock);
     if (port->tx_inited == 0) {
@@ -107,56 +138,33 @@ tx_loop(void)
     while (!info->force_quit) {
         curr_tsc = rte_rdtsc();
 
+        if (unlikely(port->tx_cycles == 0) || unlikely(info->tx_rate == 0))
+            continue;
+
         if (unlikely(curr_tsc >= burst_tsc)) {
             burst_tsc = curr_tsc + port->tx_cycles;
 
-            if (unlikely(port->tx_cycles == 0) || unlikely(info->tx_rate == 0))
-                continue;
-
-            /* Use mempool routines directly to avoid pktmbuf overhead and reseting frame data */
-            if (rte_mempool_get_bulk(tx_mp, (void **)tx_mbufs, info->burst_count) == 0) {
-                uint16_t plen = info->pkt_size - RTE_ETHER_CRC_LEN;
-
-                nb_pkts = rte_eth_tx_burst(pid, tx_qid, tx_mbufs, info->burst_count);
-                if (unlikely(nb_pkts != info->burst_count)) {
-                    rte_pktmbuf_free_bulk(&tx_mbufs[nb_pkts], info->burst_count - nb_pkts);
-                    c->q_tx_drops[tx_qid] += info->burst_count - nb_pkts;
-                    continue;
-                }
-                c->q_opackets[tx_qid] += nb_pkts;
-                c->q_obytes[tx_qid] += (nb_pkts * plen); /* does not include FCS */
-
-                c->q_tx_time[tx_qid] = rte_rdtsc() - curr_tsc;
-            } else
-                c->q_no_mbufs[tx_qid]++;
+            do_tx_process(lport, mbufs, burst_count, curr_tsc);
         }
     }
-    DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u\n", lcore_id, pid, tx_qid);
+    DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u\n", rte_lcore_id(), port->pid,
+              lport->tx_qid);
 }
 
 static void
 rxtx_loop(void)
 {
-    unsigned lcore_id = rte_lcore_id();
     l2p_lport_t *lport;
     l2p_port_t *port;
-    uint16_t rx_burst_count = info->burst_count * 2;
-    struct rte_mbuf *rx_mbufs[rx_burst_count];
-    struct rte_mempool *tx_mp;
-    qstats_t *c;
-    uint16_t pid, rx_qid, tx_qid;
-    uint16_t nb_pkts;
+    uint16_t burst_count = info->burst_count * 2; /* drain Rx at twice the Tx burst count */
+    struct rte_mbuf *mbufs[burst_count];
     uint64_t curr_tsc, burst_tsc;
 
-    lport  = info->lports[lcore_id];
-    port   = lport->port;
-    pid    = port->pid;
-    rx_qid = lport->rx_qid;
-    tx_qid = lport->tx_qid;
-    c      = &port->pq[rx_qid].curr;
-    tx_mp  = port->tx_mp;
+    lport = info->lports[rte_lcore_id()];
+    port  = lport->port;
 
-    DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u\n", lcore_id, port->pid, rx_qid);
+    DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u.%2u\n", rte_lcore_id(), port->pid,
+              lport->rx_qid, lport->tx_qid);
 
     rte_spinlock_lock(&port->tx_lock);
     if (port->tx_inited == 0) {
@@ -171,37 +179,19 @@ rxtx_loop(void)
     while (!info->force_quit) {
         curr_tsc = rte_rdtsc();
 
-        /* drain the RX queue */
-        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, rx_burst_count);
-        for (uint16_t i = 0; i < nb_pkts; i++)
-            c->q_ibytes[rx_qid] += rte_pktmbuf_pkt_len(rx_mbufs[i]);
-        c->q_ipackets[rx_qid] += nb_pkts;
-        if (nb_pkts)
-            rte_pktmbuf_free_bulk(rx_mbufs, nb_pkts);
+        do_rx_process(lport, mbufs, burst_count);
+
+        if (unlikely(port->tx_cycles == 0) || unlikely(info->tx_rate == 0))
+            continue;
 
         if (unlikely(curr_tsc >= burst_tsc)) {
             burst_tsc = curr_tsc + port->tx_cycles;
 
-            if (unlikely(port->tx_cycles == 0) || unlikely(info->tx_rate == 0))
-                continue;
-            if (rte_mempool_get_bulk(tx_mp, (void **)rx_mbufs, info->burst_count) == 0) {
-                uint16_t plen = info->pkt_size - RTE_ETHER_CRC_LEN;
-
-                nb_pkts = rte_eth_tx_burst(pid, tx_qid, rx_mbufs, info->burst_count);
-                if (unlikely(nb_pkts != info->burst_count)) {
-                    rte_pktmbuf_free_bulk(&rx_mbufs[nb_pkts], info->burst_count - nb_pkts);
-                    c->q_tx_drops[tx_qid] += info->burst_count - nb_pkts;
-                    continue;
-                }
-                c->q_opackets[tx_qid] += nb_pkts;
-                c->q_obytes[tx_qid] += (nb_pkts * plen); /* does not include FCS */
-
-                c->q_tx_time[tx_qid] = rte_rdtsc() - curr_tsc;
-            } else
-                c->q_no_mbufs[tx_qid]++;
+            do_tx_process(lport, mbufs, burst_count, curr_tsc);
         }
     }
-    DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u\n", lcore_id, pid, tx_qid);
+    DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u.%u\n", rte_lcore_id(), port->pid,
+              lport->rx_qid, lport->tx_qid);
 }
 
 static int
