@@ -47,7 +47,8 @@ rx_loop(void)
     unsigned lcore_id = rte_lcore_id();
     lport_t *lport;
     port_t *port;
-    struct rte_mbuf *rx_mbufs[info->burst_count];
+    uint16_t rx_burst_count = info->burst_count * 2;
+    struct rte_mbuf *rx_mbufs[rx_burst_count];
     qstats_t *c;
     uint16_t pid, rx_qid;
     uint16_t nb_pkts;
@@ -62,7 +63,7 @@ rx_loop(void)
 
     while (!info->force_quit) {
         /* drain the RX queue */
-        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, info->burst_count);
+        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, rx_burst_count);
         for (uint16_t i = 0; i < nb_pkts; i++)
             c->q_ibytes[rx_qid] += rte_pktmbuf_pkt_len(rx_mbufs[i]);
         c->q_ipackets[rx_qid] += nb_pkts;
@@ -137,7 +138,8 @@ rxtx_loop(void)
     unsigned lcore_id = rte_lcore_id();
     lport_t *lport;
     port_t *port;
-    struct rte_mbuf *rx_mbufs[info->burst_count];
+    uint16_t rx_burst_count = info->burst_count * 2;
+    struct rte_mbuf *rx_mbufs[rx_burst_count];
     struct rte_mempool *tx_mp;
     qstats_t *c;
     uint16_t pid, rx_qid, tx_qid;
@@ -165,7 +167,7 @@ rxtx_loop(void)
         curr_tsc = rte_rdtsc();
 
         /* drain the RX queue */
-        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, info->burst_count);
+        nb_pkts = rte_eth_rx_burst(pid, rx_qid, rx_mbufs, rx_burst_count);
         for (uint16_t i = 0; i < nb_pkts; i++)
             c->q_ibytes[rx_qid] += rte_pktmbuf_pkt_len(rx_mbufs[i]);
         c->q_ipackets[rx_qid] += nb_pkts;
