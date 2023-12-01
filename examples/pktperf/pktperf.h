@@ -110,37 +110,40 @@ typedef struct qstats_s {
     uint64_t q_no_mbufs[MAX_QUEUES_PER_PORT]; /* Number of times no mbufs were allocated */
 } qstats_t __rte_cache_aligned;
 
-typedef struct pq_s {          /* Port/Queue structure */
-    struct rte_mempool *rx_mp; /* Rx pktmbuf mempool per queue */
-    struct rte_mempool *tx_mp; /* Tx pktmbuf mempool per queue */
-    qstats_t curr;             /* Current statistics */
-    qstats_t prev;             /* Previous statistics */
-    qstats_t rate;             /* Rate statistics */
+typedef struct pq_s { /* Port/Queue structure */
+    qstats_t curr;    /* Current statistics */
+    qstats_t prev;    /* Previous statistics */
+    qstats_t rate;    /* Rate statistics */
 } pq_t;
 
-typedef struct port_s {
+typedef struct l2p_port_s {
     rte_atomic16_t inited;          /* Port initialized flag */
+    rte_spinlock_t tx_lock;         /* Tx port lock */
+    volatile uint16_t tx_inited;    /* Tx port initialized flag */
     uint16_t pid;                   /* Port ID attached to lcore */
     uint16_t num_rx_qids;           /* Number of Rx queues */
     uint16_t num_tx_qids;           /* Number of Tx queues */
+    uint16_t mtu_size;              /* MTU size */
+    uint16_t max_pkt_size;          /* Max packet size */
     uint64_t tx_cycles;             /* Tx cycles */
     uint64_t wire_size;             /* Port wire size */
-    uint64_t link_speed;            /* Port link speed */
     uint64_t pps;                   /* Packets per second */
+    struct rte_mempool *rx_mp;      /* Rx pktmbuf mempool per queue */
+    struct rte_mempool *tx_mp;      /* Tx pktmbuf mempool per queue */
     struct rte_eth_link link;       /* Port link status */
     struct rte_ether_addr mac_addr; /* MAC addresses of Port */
     struct rte_eth_stats stats;     /* Port statistics */
     struct rte_eth_stats pstats;    /* Previous port statistics */
     pq_t pq[MAX_QUEUES_PER_PORT];   /* port/queue information */
-} port_t;
+} l2p_port_t;
 
-typedef struct lport_s { /* Each lcore has one port/queue attached */
-    uint16_t mode;       /* TXPKTS_MODE_RX or TXPKTS_MODE_TX or BOTH */
-    uint16_t lid;        /* Lcore ID */
-    uint16_t rx_qid;     /* Queue ID attached to Rx lcore */
-    uint16_t tx_qid;     /* Queue ID attached to Tx lcore */
-    port_t *port;        /* Port structure */
-} lport_t;
+typedef struct l2p_lport_s { /* Each lcore has one port/queue attached */
+    uint16_t mode;           /* TXPKTS_MODE_RX or TXPKTS_MODE_TX or BOTH */
+    uint16_t lid;            /* Lcore ID */
+    uint16_t rx_qid;         /* Queue ID attached to Rx lcore */
+    uint16_t tx_qid;         /* Queue ID attached to Tx lcore */
+    l2p_port_t *port;        /* Port structure */
+} l2p_lport_t;
 
 typedef struct {
     volatile bool force_quit; /* force quit flag */
@@ -149,16 +152,17 @@ typedef struct {
     uint16_t num_ports;       /* number total of ports */
     uint16_t num_mappings;    /* number total of mappings */
 
-    lport_t *lports[RTE_MAX_LCORE] __rte_cache_aligned; /* Array of lcore/port structure pointers */
-    port_t ports[RTE_MAX_ETHPORTS] __rte_cache_aligned; /* Array of port structures */
-    char *mappings[MAX_MAPPINGS];                       /* Array of string port/queue mappings */
+    l2p_lport_t
+        *lports[RTE_MAX_LCORE] __rte_cache_aligned; /* Array of lcore/port structure pointers */
+    l2p_port_t ports[RTE_MAX_ETHPORTS] __rte_cache_aligned; /* Array of port structures */
+    char *mappings[MAX_MAPPINGS]; /* Array of string port/queue mappings */
 
     /* Configuration values from command line options */
     uint32_t mbuf_count;     /* Number of mbufs to allocate per port. */
     uint16_t tx_rate;        /* packet TX rate percentage */
     uint16_t promiscuous_on; /* Ports set in promiscuous mode off by default. */
     uint16_t burst_count;    /* Burst size for RX and TX */
-    uint16_t pkt_size;       /* Packet size with CRC */
+    uint16_t pkt_size;       /* Packet size with FCS */
     uint16_t nb_rxd;         /* number of RX descriptors */
     uint16_t nb_txd;         /* number of TX descriptors */
     uint16_t timeout_secs;   /* Statistics print timeout */
@@ -167,10 +171,10 @@ typedef struct {
 extern txpkts_info_t *info;
 
 int parse_args(int argc, char **argv);
-void packet_rate(port_t *port);
+void packet_rate(l2p_port_t *port);
 void print_stats(void);
-int port_setup(port_t *port);
-void packet_constructor(lport_t *lport, uint8_t *pkt);
+int port_setup(l2p_port_t *port);
+void packet_constructor(l2p_lport_t *lport, uint8_t *pkt);
 
 #ifdef __cplusplus
 }

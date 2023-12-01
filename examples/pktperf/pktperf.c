@@ -26,7 +26,7 @@ txpkts_info_t *info;
 static __inline__ void
 mbuf_iterate_cb(struct rte_mempool *mp, void *opaque, void *obj, unsigned obj_idx __rte_unused)
 {
-    lport_t *lport     = (lport_t *)opaque;
+    l2p_lport_t *lport = (l2p_lport_t *)opaque;
     struct rte_mbuf *m = (struct rte_mbuf *)obj;
     uint16_t plen      = info->pkt_size - RTE_ETHER_CRC_LEN;
 
@@ -45,8 +45,8 @@ static void
 rx_loop(void)
 {
     unsigned lcore_id = rte_lcore_id();
-    lport_t *lport;
-    port_t *port;
+    l2p_lport_t *lport;
+    l2p_port_t *port;
     uint16_t rx_burst_count = info->burst_count * 2;
     struct rte_mbuf *rx_mbufs[rx_burst_count];
     qstats_t *c;
@@ -77,8 +77,8 @@ static void
 tx_loop(void)
 {
     unsigned lcore_id = rte_lcore_id();
-    lport_t *lport;
-    port_t *port;
+    l2p_lport_t *lport;
+    l2p_port_t *port;
     struct rte_mbuf *tx_mbufs[info->burst_count];
     struct rte_mempool *tx_mp;
     qstats_t *c;
@@ -91,15 +91,17 @@ tx_loop(void)
     pid    = port->pid;
     tx_qid = lport->tx_qid;
     c      = &port->pq[tx_qid].curr;
-    tx_mp  = port->pq[tx_qid].tx_mp;
+    tx_mp  = port->tx_mp;
 
     DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u\n", lcore_id, port->pid, tx_qid);
 
-    packet_rate(port); /* determine the Tx packet burst rate */
-
-    /* iterate over all buffers in the pktmbuf pool and setup the packet data */
-    rte_mempool_obj_iter(port->pq[tx_qid].tx_mp, mbuf_iterate_cb, (void *)lport);
-
+    rte_spinlock_lock(&port->tx_lock);
+    if (port->tx_inited == 0) {
+        port->tx_inited = 1;
+        /* iterate over all buffers in the pktmbuf pool and setup the packet data */
+        rte_mempool_obj_iter(port->tx_mp, mbuf_iterate_cb, (void *)lport);
+    }
+    rte_spinlock_unlock(&port->tx_lock);
     burst_tsc = rte_rdtsc() + port->tx_cycles;
 
     while (!info->force_quit) {
@@ -122,7 +124,7 @@ tx_loop(void)
                     continue;
                 }
                 c->q_opackets[tx_qid] += nb_pkts;
-                c->q_obytes[tx_qid] += (nb_pkts * plen); /* does not include CRC */
+                c->q_obytes[tx_qid] += (nb_pkts * plen); /* does not include FCS */
 
                 c->q_tx_time[tx_qid] = rte_rdtsc() - curr_tsc;
             } else
@@ -136,8 +138,8 @@ static void
 rxtx_loop(void)
 {
     unsigned lcore_id = rte_lcore_id();
-    lport_t *lport;
-    port_t *port;
+    l2p_lport_t *lport;
+    l2p_port_t *port;
     uint16_t rx_burst_count = info->burst_count * 2;
     struct rte_mbuf *rx_mbufs[rx_burst_count];
     struct rte_mempool *tx_mp;
@@ -152,14 +154,17 @@ rxtx_loop(void)
     rx_qid = lport->rx_qid;
     tx_qid = lport->tx_qid;
     c      = &port->pq[rx_qid].curr;
-    tx_mp  = port->pq[rx_qid].tx_mp;
+    tx_mp  = port->tx_mp;
 
     DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u\n", lcore_id, port->pid, rx_qid);
 
-    packet_rate(port); /* determine the Tx packet burst rate */
-
-    /* iterate over all buffers in the pktmbuf pool and setup the packet data */
-    rte_mempool_obj_iter(port->pq[tx_qid].tx_mp, mbuf_iterate_cb, (void *)lport);
+    rte_spinlock_lock(&port->tx_lock);
+    if (port->tx_inited == 0) {
+        port->tx_inited = 1;
+        /* iterate over all buffers in the pktmbuf pool and setup the packet data */
+        rte_mempool_obj_iter(port->tx_mp, mbuf_iterate_cb, (void *)lport);
+    }
+    rte_spinlock_unlock(&port->tx_lock);
 
     burst_tsc = rte_rdtsc() + port->tx_cycles;
 
@@ -189,7 +194,7 @@ rxtx_loop(void)
                     continue;
                 }
                 c->q_opackets[tx_qid] += nb_pkts;
-                c->q_obytes[tx_qid] += (nb_pkts * plen); /* does not include CRC */
+                c->q_obytes[tx_qid] += (nb_pkts * plen); /* does not include FCS */
 
                 c->q_tx_time[tx_qid] = rte_rdtsc() - curr_tsc;
             } else
@@ -202,7 +207,7 @@ rxtx_loop(void)
 static int
 txpkts_launch_one_lcore(__rte_unused void *dummy)
 {
-    lport_t *lport = info->lports[rte_lcore_id()];
+    l2p_lport_t *lport = info->lports[rte_lcore_id()];
 
     if (lport == NULL || lport->port == NULL || lport->port->pid >= RTE_MAX_ETHPORTS)
         return 0;
