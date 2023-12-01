@@ -54,7 +54,7 @@ print_stats(void)
     printf("Port    : Rate Statistics per queue (%c)\n", twirl[cnt++ % 4]);
 
     for (uint16_t pid = 0; pid < info->num_ports; pid++) {
-        port_t *port = &info->ports[pid];
+        l2p_port_t *port = &info->ports[pid];
 
         if (rte_atomic16_read(&port->inited) == 0) {
             printf("Port %u is not initialized\n", pid);
@@ -114,9 +114,9 @@ print_stats(void)
                rate.imissed, rate.ierrors, rate.oerrors, rate.rx_nombuf);
     }
     printf("\nBurst: %'u, MBUF Count: %'" PRIu32 ", PktSize:%'" PRIu32
-           ", Rx/Tx %'d/%'d, Rate %u%%\n",
+           ", Rx/Tx %'d/%'d, Rate %u%%, PID: %d\n",
            info->burst_count, info->mbuf_count, info->pkt_size, info->nb_rxd, info->nb_txd,
-           info->tx_rate);
+           info->tx_rate, getpid());
 
     fflush(stdout);
 }

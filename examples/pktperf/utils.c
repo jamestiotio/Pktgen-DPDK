@@ -33,7 +33,7 @@
  * SEE ALSO:
  */
 void
-packet_rate(port_t *port)
+packet_rate(l2p_port_t *port)
 {
     uint64_t link_speed, wire_size, pps, cpb;
 
@@ -41,7 +41,6 @@ packet_rate(port_t *port)
     port->wire_size = wire_size;
     if (port->link.link_speed == 0) {
         port->tx_cycles  = 0;
-        port->link_speed = 0;
         port->pps        = 0;
         return;
     }
@@ -52,8 +51,6 @@ packet_rate(port_t *port)
     cpb        = (rte_get_timer_hz() / pps) * (uint64_t)info->burst_count; /* Cycles per Burst */
 
     port->tx_cycles = (info->tx_rate == 0) ? 0 : (uint64_t)port->num_tx_qids * cpb;
-
-    port->link_speed = link_speed;
     port->pps        = pps;
 
     DBG_PRINT("      Speed:%'4" PRIu64 " Gbit, Bits: %'6" PRIu64 ", PPS: %'12" PRIu64
@@ -77,9 +74,9 @@ get_rand(long range)
  *     Source          :    3c:fd:fe:e4:38:40
  */
 void
-packet_constructor(lport_t *lport, uint8_t *pkt)
+packet_constructor(l2p_lport_t *lport, uint8_t *pkt)
 {
-    port_t *port = lport->port;
+    l2p_port_t *port = lport->port;
     uint16_t len;
     char addr[32];
     struct rte_ether_hdr *eth;

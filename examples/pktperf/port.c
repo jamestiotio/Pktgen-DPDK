@@ -48,7 +48,7 @@ static struct rte_eth_conf port_conf = {
 };
 
 int
-port_setup(port_t *port)
+port_setup(l2p_port_t *port)
 {
     uint16_t pid;
     struct rte_eth_rxconf rxq_conf;
@@ -60,6 +60,8 @@ port_setup(port_t *port)
         rte_exit(EXIT_FAILURE, "%s: port is NULL\n", __func__);
 
     pid = port->pid;
+
+    port->mtu_size = RTE_ETHER_MTU;
 
     if (rte_atomic16_cmpset(&port->inited.cnt, 0, 1) > 0) {
         int ret;
@@ -116,13 +118,28 @@ port_setup(port_t *port)
             rte_exit(EXIT_FAILURE, "Port %u, Failed to disable Ptype parsing\n", pid);
         DBG_PRINT("Port %u configured with %08x Ptypes\n", pid, RTE_PTYPE_UNKNOWN);
 
+        if (port->mtu_size < dev_info.min_mtu) {
+            INFO_PRINT("Increasing MTU from %u to %u", port->mtu_size, dev_info.min_mtu);
+            port->mtu_size     = dev_info.min_mtu;
+            port->max_pkt_size = dev_info.min_mtu + RTE_ETHER_HDR_LEN;
+        }
+        if (port->mtu_size > dev_info.max_mtu) {
+            INFO_PRINT("Reducing MTU from %u to %u", port->mtu_size, dev_info.max_mtu);
+            port->mtu_size     = dev_info.max_mtu;
+            port->max_pkt_size = dev_info.max_mtu + RTE_ETHER_HDR_LEN;
+        }
+
+        if ((ret = rte_eth_dev_set_mtu(pid, port->mtu_size)) < 0)
+            rte_exit(EXIT_FAILURE, "Cannot set MTU %u on port %u, (%d)%s", port->mtu_size, pid,
+                     -ret, rte_strerror(-ret));
+
         DBG_PRINT("Port %u Rx/Tx queues %u/%u\n", pid, port->num_rx_qids, port->num_tx_qids);
 
         /* Setup Rx/Tx Queues */
         for (int q = 0; q < port->num_rx_qids; q++) {
             uint32_t sid = rte_eth_dev_socket_id(pid);
 
-            ret = rte_eth_rx_queue_setup(pid, q, info->nb_rxd, sid, &rxq_conf, port->pq[q].rx_mp);
+            ret = rte_eth_rx_queue_setup(pid, q, info->nb_rxd, sid, &rxq_conf, port->rx_mp);
             if (ret < 0)
                 rte_exit(EXIT_FAILURE, "rte_eth_rx_queue_setup:err=%d, port=%u\n", ret, pid);
             DBG_PRINT("Port %u:%u configured with %u RX descriptors\n", pid, q, info->nb_rxd);
