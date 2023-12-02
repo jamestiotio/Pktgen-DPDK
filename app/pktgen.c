@@ -65,7 +65,7 @@ pktgen_wire_size(port_info_t *pinfo)
     if (pktgen_tst_port_flags(pinfo, SEND_PCAP_PKTS)) {
         pcap_info_t *pcap = l2p_get_pcap(pinfo->pid);
         size              = WIRE_SIZE(pcap->max_pkt_size, uint64_t);
-    } else if (pktgen_tst_port_flags(pinfo, SEND_RATE_PACKETS))
+    } else if (pktgen_tst_port_flags(pinfo, SEND_RATE_PKTS))
         size = WIRE_SIZE(pinfo->seq_pkt[RATE_PKT].pkt_size, uint64_t);
     else {
         if (unlikely(pinfo->seqCnt > 0)) {
@@ -241,8 +241,7 @@ pktgen_tstamp_inject(port_info_t *pinfo, uint16_t qid)
     l2p_port_t *port;
 
     port = l2p_get_port(pinfo->pid);
-    mbuf = rte_pktmbuf_alloc(port->special_mp);
-    if (mbuf) {
+    if (rte_mempool_get(port->special_mp, (void **)&mbuf) == 0) {
         uint16_t pktsize = pkt->pkt_size;
 
         rte_pktmbuf_reset(mbuf);
@@ -293,7 +292,7 @@ pktgen_tstamp_check(port_info_t *pinfo, struct rte_mbuf **pkts, uint16_t nb_pkts
 
     for (i = 0; i < nb_pkts; i++) {
 
-        if (pktgen_tst_port_flags(pinfo, ENABLE_LATENCY_PKTS | SEND_RATE_PACKETS)) {
+        if (pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS | SEND_RATE_PKTS)) {
             tstamp_t *tstamp = pktgen_tstamp_pointer(pinfo, rte_pktmbuf_mtod(pkts[i], char *));
 
             if (tstamp->magic != TSTAMP_MAGIC)
@@ -311,7 +310,7 @@ pktgen_tstamp_check(port_info_t *pinfo, struct rte_mbuf **pkts, uint16_t nb_pkts
 
             lat->num_latency_pkts++;
 
-            if (pktgen_tst_port_flags(pinfo, ENABLE_LATENCY_PKTS | SEND_RATE_PACKETS)) {
+            if (pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS | SEND_RATE_PKTS)) {
                 lat->running_cycles += cycles;
 
                 if (lat->min_cycles == 0 || cycles < lat->min_cycles)
@@ -756,7 +755,7 @@ pktgen_send_special(port_info_t *pinfo)
     for (uint32_t s = 0; s < pinfo->seqCnt; s++) {
         if (unlikely(pktgen_tst_port_flags(pinfo, SEND_GRATUITOUS_ARP)))
             pktgen_send_arp(pinfo->pid, GRATUITOUS_ARP, s);
-        if (unlikely(pktgen_tst_port_flags(pinfo, SEND_ARP_REQUEST)))
+        else if (unlikely(pktgen_tst_port_flags(pinfo, SEND_ARP_REQUEST)))
             pktgen_send_arp(pinfo->pid, 0, s);
 
         if (unlikely(pktgen_tst_port_flags(pinfo, SEND_PING4_REQUEST)))
@@ -773,7 +772,7 @@ pktgen_send_special(port_info_t *pinfo)
     /* Send the requests from the Single packet setup. */
     if (unlikely(pktgen_tst_port_flags(pinfo, SEND_GRATUITOUS_ARP)))
         pktgen_send_arp(pinfo->pid, GRATUITOUS_ARP, SINGLE_PKT);
-    if (unlikely(pktgen_tst_port_flags(pinfo, SEND_ARP_REQUEST)))
+    else if (unlikely(pktgen_tst_port_flags(pinfo, SEND_ARP_REQUEST)))
         pktgen_send_arp(pinfo->pid, 0, SINGLE_PKT);
 
     if (unlikely(pktgen_tst_port_flags(pinfo, SEND_PING4_REQUEST)))
@@ -786,19 +785,39 @@ pktgen_send_special(port_info_t *pinfo)
     pktgen_clr_port_flags(pinfo, SEND_ARP_PING_REQUESTS);
 }
 
+struct pkt_setup_s {
+    int32_t seq_idx;
+    port_info_t *pinfo;
+};
+
 static __inline__ void
 pktgen_setup_cb(struct rte_mempool *mp __rte_unused, void *opaque, void *obj,
                 unsigned obj_idx __rte_unused)
 {
-    struct rte_mbuf *m   = (struct rte_mbuf *)obj;
-    union pktgen_data *d = pktgen_data_field(m);
-    port_info_t *pinfo   = (port_info_t *)opaque;
+    struct rte_mbuf *m    = (struct rte_mbuf *)obj;
+    union pktgen_data *d  = pktgen_data_field(m);
+    struct pkt_setup_s *s = (struct pkt_setup_s *)opaque;
+    port_info_t *pinfo    = s->pinfo;
+    int32_t idx, seq_idx = s->seq_idx;
     pkt_seq_t *pkt;
 
     /* Cleanup the mbuf data as virtio messes with the values */
     rte_pktmbuf_reset(m);
 
-    pkt = &pinfo->seq_pkt[SINGLE_PKT];
+    idx = seq_idx;
+    if (pktgen_tst_port_flags(pinfo, SEND_SEQ_PKTS)) {
+        idx = pinfo->seqIdx;
+
+        /* move to the next packet in the sequence. */
+        if (unlikely(++pinfo->seqIdx >= pinfo->seqCnt))
+            pinfo->seqIdx = 0;
+    }
+    pkt = &pinfo->seq_pkt[idx];
+
+    if (idx == RANGE_PKT)
+        pktgen_range_ctor(&pinfo->range, pkt);
+
+    pktgen_packet_ctor(pinfo, idx, -1);
 
     rte_memcpy(rte_pktmbuf_mtod(m, uint8_t *), (uint8_t *)pkt->hdr, pkt->pkt_size);
 
@@ -870,11 +889,30 @@ pktgen_setup_packets(uint16_t pid)
 
     /* Make sure we are not updating the mempool from two different lcores */
     rte_spinlock_lock(&port->lock);
-    if (port->initialized == 0) {
-        port->initialized = 1;
-        printf("%s: %d.%d mempool '%s' initialized\n", __func__, rte_lcore_id(), pid, tx_mp->name);
-        pktgen_packet_ctor(pinfo, SINGLE_PKT, -1);
-        rte_mempool_obj_iter(tx_mp, pktgen_setup_cb, pinfo);
+
+    if (pktgen_tst_port_flags(pinfo, SETUP_TRANSMIT_PKTS)) {
+        pktgen_clr_port_flags(pinfo, SETUP_TRANSMIT_PKTS);
+
+        if (!pktgen_tst_port_flags(pinfo, SEND_PCAP_PKTS)) {
+            struct pkt_setup_s s;
+            int32_t idx = SINGLE_PKT;
+
+            if (pktgen_tst_port_flags(pinfo, SEND_RANGE_PKTS)) {
+                idx = RANGE_PKT;
+                pktgen_range_setup(pinfo);
+            } else if (pktgen_tst_port_flags(pinfo, SEND_SEQ_PKTS))
+                idx = FIRST_SEQ_PKT;
+            else if (pktgen_tst_port_flags(pinfo, (SEND_SINGLE_PKTS | SEND_RANDOM_PKTS)))
+                idx = SINGLE_PKT;
+            else if (pktgen_tst_port_flags(pinfo, SEND_RATE_PKTS))
+                idx = RATE_PKT;
+            else if (pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS))
+                idx = LATENCY_PKT;
+
+            s.pinfo   = pinfo;
+            s.seq_idx = idx;
+            rte_mempool_obj_iter(tx_mp, pktgen_setup_cb, &s);
+        }
     }
     rte_spinlock_unlock(&port->lock);
 }
@@ -913,7 +951,7 @@ pktgen_send_pkts(port_info_t *pinfo, uint16_t qid, struct rte_mempool *mp)
         tx_send_packets(pinfo, qid, mbufs, mlen);
 
     if (qid == 0) {
-        uint32_t tstamp = pktgen_tst_port_flags(pinfo, (ENABLE_LATENCY_PKTS | SEND_RATE_PACKETS));
+        uint32_t tstamp = pktgen_tst_port_flags(pinfo, (SEND_LATENCY_PKTS | SEND_RATE_PKTS));
 
         if (tstamp) {
             uint64_t curr_ts;
@@ -954,6 +992,9 @@ pktgen_main_transmit(port_info_t *pinfo, uint16_t qid)
     /* When not transmitting on this port then continue. */
     if (pktgen_tst_port_flags(pinfo, SENDING_PACKETS)) {
         mp = l2p_get_tx_mp(pinfo->pid);
+
+        if (pktgen_tst_port_flags(pinfo, SETUP_TRANSMIT_PKTS))
+            pktgen_setup_packets(pinfo->pid);
 
         pinfo->qcnt[qid]++; /* Count the number of times queue is sending */
 
@@ -1039,7 +1080,7 @@ pktgen_main_rxtx_loop(void)
         rte_exit(0, "using initial lcore for port");
     }
 
-    pinfo = l2p_get_port_pinfo(pinfo->pid);
+    pinfo = l2p_get_pinfo_by_lcore(lid);
 
     rx_qid = l2p_get_rxqid(lid);
     tx_qid = l2p_get_txqid(lid);
@@ -1049,8 +1090,6 @@ pktgen_main_rxtx_loop(void)
     curr_tsc      = pktgen_get_time();
     tx_next_cycle = curr_tsc;
     tx_bond_cycle = curr_tsc + (pktgen_get_timer_hz() / 10);
-
-    pktgen_setup_packets(pinfo->pid);
 
     while (pktgen.force_quit == 0) {
         /* Read Packets */
@@ -1110,8 +1149,6 @@ pktgen_main_tx_loop(void)
     curr_tsc      = pktgen_get_time();
     tx_next_cycle = curr_tsc;
     tx_bond_cycle = curr_tsc + pktgen_get_timer_hz() / 10;
-
-    pktgen_setup_packets(pinfo->pid);
 
     while (pktgen.force_quit == 0) {
         curr_tsc = pktgen_get_time();

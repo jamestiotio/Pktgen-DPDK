@@ -21,18 +21,20 @@
 
 #include <pktperf.h>
 
-#define sprint(name, cntr)                                                \
-    do {                                                                  \
-        qstats_t *r;                                                      \
-        uint64_t total = 0;                                               \
-        printf("  %-6s:", name);                                          \
-        for (uint16_t q = 0; q < port->num_rx_qids; q++) {                \
-            r = &port->pq[q].rate;                                        \
-            total += r->cntr[q];                                          \
-            printf(" %'12" PRIu64, (r->cntr[q] / info->timeout_secs));    \
-        }                                                                 \
-        printf(" Total: %'12" PRIu64 "\n", (total / info->timeout_secs)); \
-        fflush(stdout);                                                   \
+#define sprint(name, cntr, nl)                                         \
+    do {                                                               \
+        qstats_t *r;                                                   \
+        uint64_t total = 0;                                            \
+        printf("  %-8s", name);                                        \
+        for (uint16_t q = 0; q < port->num_rx_qids; q++) {             \
+            r = &port->pq[q].rate;                                     \
+            total += r->cntr[q];                                       \
+            printf("|%'12" PRIu64, (r->cntr[q] / info->timeout_secs)); \
+        }                                                              \
+        printf("|%'14" PRIu64 "|", (total / info->timeout_secs));      \
+        if (nl)                                                        \
+            printf("\n");                                              \
+        fflush(stdout);                                                \
     } while (0)
 
 /* Print out statistics on packets dropped */
@@ -86,9 +88,10 @@ print_stats(void)
             r->q_ipackets[q] = c->q_ipackets[q] - p->q_ipackets[q];
             r->q_ibytes[q]   = c->q_ibytes[q] - p->q_ibytes[q];
 
-            r->q_no_mbufs[q] = c->q_no_mbufs[q] - p->q_no_mbufs[q];
-            r->q_tx_drops[q] = c->q_tx_drops[q] - p->q_tx_drops[q];
-            r->q_tx_time[q]  = c->q_tx_time[q];
+            r->q_no_txmbufs[q] = c->q_no_txmbufs[q] - p->q_no_txmbufs[q];
+            r->q_tx_drops[q]   = c->q_tx_drops[q] - p->q_tx_drops[q];
+            r->q_tx_time[q]    = c->q_tx_time[q];
+            r->q_rx_time[q]    = c->q_rx_time[q];
 
             memcpy(p, c, sizeof(qstats_t));
         }
@@ -97,24 +100,35 @@ print_stats(void)
         rte_eth_link_get_nowait(pid, &link);
         rte_eth_link_to_str(link_status_text, sizeof(link_status_text), &link);
 
-        printf("%2u >> %s,", pid, link_status_text);
+        printf("%2u >> %s, ", pid, link_status_text);
 
         packet_rate(port);
-        printf(" WireSize %'" PRIu64 " Bits, PPS %'" PRIu64 ", Cycles/Burst %'" PRIu64 "\n",
-               port->wire_size, port->pps, port->tx_cycles);
+        printf("MaxPPS:%'" PRIu64 ", TxCPB:%'" PRIu64 "\n", port->pps, port->tx_cycles);
 
-        sprint("RxQs", q_ipackets);
-        sprint("TxQs", q_opackets);
-        sprint("TxDrop", q_tx_drops);
-        sprint("NoMBUF", q_no_mbufs);
-        sprint("TxTime", q_tx_time);
+        printf("  Queue ID");
+        for (uint16_t q = 0; q < port->num_rx_qids; q++)
+            printf("|%8u    ", q);
+        printf("|  %8s    |\n", "Total");
+        printf("  --------+------------+------------+------------+--------------+\n");
 
-        printf("  RxMissed: %'12" PRIu64 ", ierr: %'" PRIu64 ", oerr: %'" PRIu64
-               ", RxNoMbuf: %'" PRIu64 "\n",
-               rate.imissed, rate.ierrors, rate.oerrors, rate.rx_nombuf);
+        sprint("RxQs", q_ipackets, 0);
+        if (rate.ierrors)
+            printf(" Err : %'12" PRIu64, rate.ierrors);
+        if (rate.imissed)
+            printf(" Miss: %'12" PRIu64, rate.imissed);
+        printf("\n");
+        sprint("TxQs", q_opackets, 0);
+        if (rate.oerrors)
+            printf(" Err : %'12" PRIu64, rate.oerrors);
+        printf("\n");
+        sprint("TxDrop", q_tx_drops, 1);
+        sprint("NoTxMBUF", q_no_txmbufs, 1);
+        sprint("RxTime", q_rx_time, 1);
+        sprint("TxTime", q_tx_time, 1);
+        printf("\n");
     }
-    printf("\nBurst: %'u, MBUF Count: %'" PRIu32 ", PktSize:%'" PRIu32
-           ", Rx/Tx %'d/%'d, Rate %u%%, PID: %d\n",
+    printf("Pktperf: Burst: %'u, MBUFs/port: %'" PRIu32 ", PktSize:%'" PRIu32
+           ", Rx/Tx %'d/%'d, TxRate %u%%, PID: %d\n",
            info->burst_count, info->mbuf_count, info->pkt_size, info->nb_rxd, info->nb_txd,
            info->tx_rate, getpid());
 

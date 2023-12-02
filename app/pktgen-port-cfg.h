@@ -50,26 +50,25 @@ enum { /* Per port flag bits */
        SEND_PING6_REQUEST = (1 << 7), /**< Send a IPv6 Ping request */
 
        /* Exclusive Packet sending modes */
-       SEND_PCAP_PKTS  = (1 << 12), /**< Send a pcap file of packets */
-       SEND_RANGE_PKTS = (1 << 13), /**< Send a range of packets */
-       SEND_SEQ_PKTS   = (1 << 14), /**< Send a sequence of packets */
-
-       SEND_RATE_PACKETS = (1 << 16), /**< Send rate pacing packets */
+       SEND_PCAP_PKTS    = (1 << 12), /**< Send a pcap file of packets */
+       SEND_RANGE_PKTS   = (1 << 13), /**< Send a range of packets */
+       SEND_SEQ_PKTS     = (1 << 14), /**< Send a sequence of packets */
+       SEND_SINGLE_PKTS  = (1 << 15), /**< Send a single packets */
+       SEND_RATE_PKTS    = (1 << 16), /**< Send rate pacing packets */
        SEND_RANDOM_PKTS  = (1 << 17), /**< Send random bitfields in packets */
+       SEND_LATENCY_PKTS = (1 << 18), /**< Send latency packets */
 
        /* Exclusive Packet type modes */
-       SEND_VLAN_ID         = (1 << 20), /**< Send packets with VLAN ID */
-       SEND_MPLS_LABEL      = (1 << 21), /**< Send MPLS label */
-       SEND_Q_IN_Q_IDS      = (1 << 22), /**< Send packets with Q-in-Q */
-       SEND_GRE_IPv4_HEADER = (1 << 23), /**< Encapsulate IPv4 in GRE */
-
+       SEND_VLAN_ID          = (1 << 20), /**< Send packets with VLAN ID */
+       SEND_MPLS_LABEL       = (1 << 21), /**< Send MPLS label */
+       SEND_Q_IN_Q_IDS       = (1 << 22), /**< Send packets with Q-in-Q */
+       SEND_GRE_IPv4_HEADER  = (1 << 23), /**< Encapsulate IPv4 in GRE */
        SEND_GRE_ETHER_HEADER = (1 << 24), /**< Encapsulate Ethernet frame in GRE */
        SEND_VXLAN_PACKETS    = (1 << 25), /**< Send VxLAN Packets */
-
-       SAMPLING_LATENCIES  = (1 << 26), /**< Sampling latency measurements> */
-       ENABLE_LATENCY_PKTS = (1 << 27), /**< Send latency packets */
+       SAMPLING_LATENCIES    = (1 << 26), /**< Sampling latency measurements> */
 
        /* Sending flags */
+       SETUP_TRANSMIT_PKTS    = (1 << 28), /**< Need to setup transmit packets */
        STOP_RECEIVING_PACKETS = (1 << 29), /**< Stop receiving packet */
        SENDING_PACKETS        = (1 << 30), /**< sending packets on this port */
        SEND_FOREVER           = (1 << 31), /**< Send packets forever */
@@ -79,7 +78,7 @@ enum { /* Per port flag bits */
 };
 
 #define EXCLUSIVE_MODES \
-    (SEND_PCAP_PKTS | SEND_RANGE_PKTS | SEND_SEQ_PKTS | SEND_RANDOM_PKTS | SEND_RATE_PACKETS)
+    (SEND_PCAP_PKTS | SEND_RANGE_PKTS | SEND_SEQ_PKTS | SEND_RANDOM_PKTS | SEND_RATE_PKTS)
 
 #define EXCLUSIVE_PKT_MODES                                                  \
     (SEND_VLAN_ID | SEND_VXLAN_PACKETS | SEND_MPLS_LABEL | SEND_Q_IN_Q_IDS | \

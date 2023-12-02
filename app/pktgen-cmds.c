@@ -226,11 +226,11 @@ pktgen_script_save(char *path)
         fprintf(fd, "%sable %d icmp\n", (flags & ICMP_ECHO_ENABLE_FLAG) ? "en" : "dis", i);
         fprintf(fd, "%sable %d pcap\n", (flags & SEND_PCAP_PKTS) ? "en" : "dis", i);
         fprintf(fd, "%sable %d range\n", (flags & SEND_RANGE_PKTS) ? "en" : "dis", i);
-        fprintf(fd, "%sable %d latency\n", (flags & ENABLE_LATENCY_PKTS) ? "en" : "dis", i);
+        fprintf(fd, "%sable %d latency\n", (flags & SEND_LATENCY_PKTS) ? "en" : "dis", i);
         fprintf(fd, "%sable %d process\n", (flags & PROCESS_INPUT_PKTS) ? "en" : "dis", i);
         fprintf(fd, "%sable %d capture\n", (flags & CAPTURE_PKTS) ? "en" : "dis", i);
         fprintf(fd, "%sable %d vlan\n", (flags & SEND_VLAN_ID) ? "en" : "dis", i);
-        fprintf(fd, "%sable %d rate\n\n", (flags & SEND_RATE_PACKETS) ? "en" : "dis", i);
+        fprintf(fd, "%sable %d rate\n\n", (flags & SEND_RATE_PKTS) ? "en" : "dis", i);
 
         fprintf(fd, "#\n# Range packet information:\n");
         fprintf(fd, "range %d src mac start %s\n", i,
@@ -583,7 +583,7 @@ pktgen_lua_save(char *path)
         fprintf(fd, "pktgen.set_range('%d', '%sable');\n", i,
                 (flags & SEND_RANGE_PKTS) ? "en" : "dis");
         fprintf(fd, "pktgen.latency('%d', '%sable');\n", i,
-                (flags & ENABLE_LATENCY_PKTS) ? "en" : "dis");
+                (flags & SEND_LATENCY_PKTS) ? "en" : "dis");
         fprintf(fd, "pktgen.process('%d', '%sable');\n", i,
                 (flags & PROCESS_INPUT_PKTS) ? "en" : "dis");
         fprintf(fd, "pktgen.capture('%d', '%sable');\n", i, (flags & CAPTURE_PKTS) ? "en" : "dis");
@@ -1020,7 +1020,7 @@ pktgen_flags_string(port_info_t *pinfo)
     snprintf(buff, sizeof(buff), "%c%c%c%c%c%c%-6s%6s",
              (pktgen.flags & PROMISCUOUS_ON_FLAG) ? 'P' : '-',
              (flags & ICMP_ECHO_ENABLE_FLAG) ? 'E' : '-', (flags & BONDING_TX_PACKETS) ? 'B' : '-',
-             (flags & PROCESS_INPUT_PKTS) ? 'I' : '-', (flags & ENABLE_LATENCY_PKTS) ? 'L' : '-',
+             (flags & PROCESS_INPUT_PKTS) ? 'I' : '-', (flags & SEND_LATENCY_PKTS) ? 'L' : '-',
              (flags & CAPTURE_PKTS) ? 'c' : '-',
 
              (flags & SEND_VLAN_ID)            ? "VLAN"
@@ -1031,12 +1031,12 @@ pktgen_flags_string(port_info_t *pinfo)
              : (flags & SEND_GRE_ETHER_HEADER) ? "GREet"
                                                : "",
 
-             (flags & SEND_PCAP_PKTS)      ? "PCAP"
-             : (flags & SEND_SEQ_PKTS)     ? "Seq"
-             : (flags & SEND_RANGE_PKTS)   ? "Range"
-             : (flags & SEND_RANDOM_PKTS)  ? "Random"
-             : (flags & SEND_RATE_PACKETS) ? "Rate"
-                                           : "Single");
+             (flags & SEND_PCAP_PKTS)     ? "PCAP"
+             : (flags & SEND_SEQ_PKTS)    ? "Seq"
+             : (flags & SEND_RANGE_PKTS)  ? "Range"
+             : (flags & SEND_RANDOM_PKTS) ? "Random"
+             : (flags & SEND_RATE_PKTS)   ? "Rate"
+                                          : "Single");
 
     /* single, range, sequence, random, pcap, latency, rate */
 
@@ -1331,7 +1331,7 @@ pktgen_start_transmitting(port_info_t *pinfo)
         if (rte_atomic64_read(&pinfo->current_tx_count) == 0)
             pktgen_set_port_flags(pinfo, SEND_FOREVER);
 
-        pktgen_set_port_flags(pinfo, SENDING_PACKETS);
+        pktgen_set_port_flags(pinfo, (SENDING_PACKETS | SETUP_TRANSMIT_PKTS));
     }
 }
 
@@ -1351,7 +1351,7 @@ void
 pktgen_stop_transmitting(port_info_t *pinfo)
 {
     if (pktgen_tst_port_flags(pinfo, SENDING_PACKETS))
-        pktgen_clr_port_flags(pinfo, (SENDING_PACKETS | SEND_FOREVER));
+        pktgen_clr_port_flags(pinfo, (SENDING_PACKETS | SEND_FOREVER | SETUP_TRANSMIT_PKTS));
 }
 
 static void
@@ -1646,14 +1646,14 @@ enable_rate(port_info_t *pinfo, uint32_t state)
 {
     if (state == ENABLE_STATE) {
         pktgen_clr_port_flags(pinfo, EXCLUSIVE_MODES);
-        pktgen_set_port_flags(pinfo, SEND_RATE_PACKETS);
+        pktgen_set_port_flags(pinfo, SEND_RATE_PKTS);
 
         single_set_proto(pinfo, (char *)(uintptr_t) "udp");
         update_rate_values(pinfo);
     } else {
         pkt_seq_t *pkt = &pinfo->seq_pkt[RATE_PKT];
 
-        pktgen_clr_port_flags(pinfo, SEND_RATE_PACKETS);
+        pktgen_clr_port_flags(pinfo, SEND_RATE_PKTS);
         pinfo->rx_burst = DEFAULT_PKT_RX_BURST;
         pinfo->tx_burst = DEFAULT_PKT_TX_BURST;
         pkt->pkt_size   = RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN;
@@ -2554,8 +2554,7 @@ debug_pdump(port_info_t *pinfo)
     pkt_seq_t *spkt  = &pinfo->seq_pkt[SINGLE_PKT];
     struct rte_mbuf *m;
 
-    m = rte_pktmbuf_alloc(port->special_mp);
-    if (unlikely(m == NULL)) {
+    if (rte_mempool_get(port->special_mp, (void **)&m)) {
         pktgen_log_warning("No packet buffers found");
         return;
     }
@@ -3592,9 +3591,9 @@ enable_latency(port_info_t *pinfo, uint32_t state)
         pktgen_latency_setup(pinfo);
         pktgen_packet_ctor(pinfo, LATENCY_PKT, -2);
 
-        pktgen_set_port_flags(pinfo, ENABLE_LATENCY_PKTS);
+        pktgen_set_port_flags(pinfo, SEND_LATENCY_PKTS);
     } else
-        pktgen_clr_port_flags(pinfo, ENABLE_LATENCY_PKTS);
+        pktgen_clr_port_flags(pinfo, SEND_LATENCY_PKTS);
 }
 
 /**
