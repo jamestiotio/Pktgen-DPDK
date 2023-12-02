@@ -1738,7 +1738,6 @@ static struct cli_map page_map[] = {
          "log|latency|lat|stats|xstats|rate|rate-pacing"},
     {-1, NULL}
 };
-// clang-format on
 
 static const char *page_help[] = {
     "",
@@ -1761,7 +1760,9 @@ static const char *page_help[] = {
     "page xstats                        - Display port XSTATS values",
     "page rate                          - Display Rate Pacing values",
     CLI_HELP_PAUSE,
-    NULL};
+    NULL
+};
+// clang-format on
 
 static int
 page_cmd(int argc, char **argv)
@@ -1791,7 +1792,6 @@ static struct cli_map plugin_map[] = {
     {30, "plugin %|rm|del|delete %s"},
     {-1, NULL}
 };
-// clang-format on
 
 static const char *plugin_help[] = {
     "",
@@ -1800,7 +1800,9 @@ static const char *plugin_help[] = {
     "plugin load <filename> <path>      - Load a plugin file at path",
     "plugin rm|delete <plugin>          - Remove or delete a plugin",
     CLI_HELP_PAUSE,
-    NULL};
+    NULL
+};
+// clang-format on
 
 static int
 plugin_cmd(int argc, char **argv)

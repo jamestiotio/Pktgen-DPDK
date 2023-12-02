@@ -141,7 +141,8 @@ parse_cores(l2p_port_t *port, const char *cores, int mode)
                   lport->tx_qid, name);
 
         if (port->rx_mp == NULL) {
-            printf("Creating Rx mbuf pool for lcore %u, port %u\n", l, port->pid);
+            printf("Creating Rx mbuf pool for lcore %3u, port %2u, MBUF Count %'u\n", l, port->pid,
+                   info->mbuf_count);
 
             /* Create the Rx mbuf pool one per lcore/port */
             snprintf(name, sizeof(name), "rx-%u/%u", lport->lid, port->pid);
@@ -153,7 +154,8 @@ parse_cores(l2p_port_t *port, const char *cores, int mode)
                          name);
         }
         if (port->tx_mp == NULL) {
-            printf("Creating Tx mbuf pool for lcore %u, port %u\n", l, port->pid);
+            printf("Creating Tx mbuf pool for lcore %3u, port %2u, MBUF Count %'u\n", l, port->pid,
+                   info->mbuf_count);
 
             /* Create the Tx mbuf pool pne per lcore/port/queue */
             snprintf(name, sizeof(name), "tx-%u/%u", lport->lid, port->pid);
@@ -351,8 +353,10 @@ parse_args(int argc, char **argv)
     ret    = optind - 1;
     optind = 1; /* reset getopt lib */
 
-    info->mbuf_count = info->num_ports * (info->nb_rxd + info->nb_txd + info->burst_count +
-                                          (rte_lcore_count() * MEMPOOL_CACHE_SIZE));
+    printf("num_ports: %'u, nb_rxd %'u, nb_txd %'u, burst %'u, lcores %'u\n", info->num_ports,
+           info->nb_rxd, info->nb_txd, info->burst_count, rte_lcore_count());
+    info->mbuf_count += info->num_ports * (info->nb_rxd + info->nb_txd + info->burst_count +
+                                           (rte_lcore_count() * MEMPOOL_CACHE_SIZE));
     info->mbuf_count = RTE_MAX(info->mbuf_count, DEFAULT_MBUF_COUNT);
 
     DBG_PRINT("TX packet application started, Burst size %'u, Packet size %'u, Rate %u%%\n",

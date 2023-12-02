@@ -41,7 +41,7 @@ mbuf_iterate_cb(struct rte_mempool *mp, void *opaque, void *obj, unsigned obj_id
 }
 
 static __inline__ void
-do_rx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint32_t n_mbufs)
+do_rx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint32_t n_mbufs, uint64_t curr_tsc)
 {
     l2p_port_t *port = lport->port;
     qstats_t *c;
@@ -58,11 +58,12 @@ do_rx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint32_t n_mbufs)
         c->q_ipackets[rx_qid] += nb_pkts;
 
         rte_pktmbuf_free_bulk(mbufs, nb_pkts);
+        c->q_rx_time[rx_qid] = rte_rdtsc() - curr_tsc;
     }
 }
 
 static __inline__ void
-do_tx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint32_t n_mbufs, uint64_t curr_tsc)
+do_tx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint16_t n_mbufs, uint64_t curr_tsc)
 {
     l2p_port_t *port = lport->port;
     struct rte_mempool *mp;
@@ -74,13 +75,16 @@ do_tx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint32_t n_mbufs, uin
     c      = &port->pq[tx_qid].curr;
     mp     = lport->port->tx_mp;
 
+    /* Use mempool routines instead of pktmbuf to make sure the mbufs is not altered */
     if (rte_mempool_get_bulk(mp, (void **)mbufs, n_mbufs) == 0) {
         uint16_t plen = info->pkt_size - RTE_ETHER_CRC_LEN;
 
-        nb_pkts = rte_eth_tx_burst(pid, tx_qid, mbufs, info->burst_count);
-        if (unlikely(nb_pkts != info->burst_count)) {
-            rte_pktmbuf_free_bulk(&mbufs[nb_pkts], info->burst_count - nb_pkts);
-            c->q_tx_drops[tx_qid] += info->burst_count - nb_pkts;
+        nb_pkts = rte_eth_tx_burst(pid, tx_qid, mbufs, n_mbufs);
+        if (unlikely(nb_pkts != n_mbufs)) {
+            uint32_t n = n_mbufs - nb_pkts;
+
+            rte_mempool_put_bulk(mp, (void **)&mbufs[nb_pkts], n);
+            c->q_tx_drops[tx_qid] += n;
             return;
         }
         c->q_opackets[tx_qid] += nb_pkts;
@@ -88,7 +92,7 @@ do_tx_process(l2p_lport_t *lport, struct rte_mbuf **mbufs, uint32_t n_mbufs, uin
 
         c->q_tx_time[tx_qid] = rte_rdtsc() - curr_tsc;
     } else
-        c->q_no_mbufs[tx_qid]++;
+        c->q_no_txmbufs[tx_qid]++;
 }
 
 /* main processing loop */
@@ -96,8 +100,8 @@ static void
 rx_loop(void)
 {
     l2p_lport_t *lport;
-    uint16_t burst_count = info->burst_count * 2; /* drain Rx at twice the Tx burst count */
-    struct rte_mbuf *rx_mbufs[burst_count];
+    uint16_t rx_burst = info->burst_count * 2;
+    struct rte_mbuf *mbufs[rx_burst];
 
     lport = info->lports[rte_lcore_id()];
 
@@ -105,7 +109,7 @@ rx_loop(void)
               lport->rx_qid);
 
     while (!info->force_quit)
-        do_rx_process(lport, rx_mbufs, burst_count);
+        do_rx_process(lport, mbufs, rx_burst, rte_rdtsc());
 
     DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u\n", rte_lcore_id(), lport->port->pid,
               lport->rx_qid);
@@ -116,9 +120,9 @@ tx_loop(void)
 {
     l2p_lport_t *lport;
     l2p_port_t *port;
-    uint16_t burst_count = info->burst_count;
-    struct rte_mbuf *mbufs[burst_count];
     uint64_t curr_tsc, burst_tsc;
+    uint16_t tx_burst = info->burst_count;
+    struct rte_mbuf *mbufs[tx_burst];
 
     lport = info->lports[rte_lcore_id()];
     port  = lport->port;
@@ -138,13 +142,11 @@ tx_loop(void)
     while (!info->force_quit) {
         curr_tsc = rte_rdtsc();
 
-        if (unlikely(port->tx_cycles == 0) || unlikely(info->tx_rate == 0))
-            continue;
-
         if (unlikely(curr_tsc >= burst_tsc)) {
             burst_tsc = curr_tsc + port->tx_cycles;
 
-            do_tx_process(lport, mbufs, burst_count, curr_tsc);
+            if (likely(port->tx_cycles))
+                do_tx_process(lport, mbufs, tx_burst, curr_tsc);
         }
     }
     DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u\n", rte_lcore_id(), port->pid,
@@ -156,9 +158,10 @@ rxtx_loop(void)
 {
     l2p_lport_t *lport;
     l2p_port_t *port;
-    uint16_t burst_count = info->burst_count * 2; /* drain Rx at twice the Tx burst count */
-    struct rte_mbuf *mbufs[burst_count];
     uint64_t curr_tsc, burst_tsc;
+    uint16_t rx_burst = info->burst_count * 2;
+    uint16_t tx_burst = info->burst_count;
+    struct rte_mbuf *mbufs[rx_burst];
 
     lport = info->lports[rte_lcore_id()];
     port  = lport->port;
@@ -179,15 +182,13 @@ rxtx_loop(void)
     while (!info->force_quit) {
         curr_tsc = rte_rdtsc();
 
-        do_rx_process(lport, mbufs, burst_count);
-
-        if (unlikely(port->tx_cycles == 0) || unlikely(info->tx_rate == 0))
-            continue;
+        do_rx_process(lport, mbufs, rx_burst, curr_tsc);
 
         if (unlikely(curr_tsc >= burst_tsc)) {
             burst_tsc = curr_tsc + port->tx_cycles;
 
-            do_tx_process(lport, mbufs, burst_count, curr_tsc);
+            if (likely(port->tx_cycles))
+                do_tx_process(lport, mbufs, tx_burst, curr_tsc);
         }
     }
     DBG_PRINT("Exiting loop for lcore:port:queue %3u:%2u:%2u.%u\n", rte_lcore_id(), port->pid,

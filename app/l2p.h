@@ -36,7 +36,6 @@ struct port_info_s;
 
 typedef struct l2p_port_s {
     rte_spinlock_t lock;                           /* Lock for this port */
-    volatile uint16_t initialized;                 /* Port is initialized */
     struct port_info_s *pinfo;                     /* Port information pointer */
     uint16_t pid;                                  /* Port ID attached to lcore */
     uint16_t num_rx_qids;                          /* Number of Rx queues */

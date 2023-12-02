@@ -105,9 +105,10 @@ typedef struct qstats_s {
     uint64_t q_opackets[MAX_QUEUES_PER_PORT]; /** queue Tx packets */
     uint64_t q_obytes[MAX_QUEUES_PER_PORT];   /** successfully transmitted queue bytes */
 
-    uint64_t q_tx_drops[MAX_QUEUES_PER_PORT]; /* Tx dropped packets per queue */
-    uint64_t q_tx_time[MAX_QUEUES_PER_PORT];  /* Cycles to transmit burst of packets */
-    uint64_t q_no_mbufs[MAX_QUEUES_PER_PORT]; /* Number of times no mbufs were allocated */
+    uint64_t q_rx_time[MAX_QUEUES_PER_PORT];    /* Cycles to receive a burst of packets */
+    uint64_t q_tx_drops[MAX_QUEUES_PER_PORT];   /* Tx dropped packets per queue */
+    uint64_t q_tx_time[MAX_QUEUES_PER_PORT];    /* Cycles to transmit a burst of packets */
+    uint64_t q_no_txmbufs[MAX_QUEUES_PER_PORT]; /* Number of times no mbufs were allocated */
 } qstats_t __rte_cache_aligned;
 
 typedef struct pq_s { /* Port/Queue structure */

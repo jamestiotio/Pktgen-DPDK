@@ -64,50 +64,6 @@ static struct rte_eth_conf default_port_conf = {
         },
 };
 
-#if 0
-/**
- *
- * pktgen_mbuf_pool_create - Create mbuf packet pool.
- *
- * DESCRIPTION
- * Callback routine for creating mbuf packets from a mempool.
- *
- * RETURNS: N/A
- *
- * SEE ALSO:
- */
-static struct rte_mempool *
-pktgen_mbuf_pool_create(const char *type, uint8_t pid, uint32_t nb_mbufs, int sid,
-                        int cache_size)
-{
-    struct rte_mempool *mp;
-    char name[RTE_MEMZONE_NAMESIZE];
-    uint64_t sz;
-
-    snprintf(name, sizeof(name), "%-12s%u", type, pid);
-
-    sz = nb_mbufs * DEFAULT_MBUF_SIZE;
-    sz = RTE_ALIGN_CEIL(sz + sizeof(struct rte_mempool), 1024);
-
-    if (pktgen.verbose)
-        pktgen_log_info("    Create: '%-*s' - Memory used (MBUFs %6u x size %6u) = %6lu KB", 16,
-                        name, nb_mbufs, DEFAULT_MBUF_SIZE, sz / 1024);
-
-    pktgen.mem_used += sz;
-    pktgen.total_mem_used += sz;
-
-    /* create the mbuf pool */
-    mp = rte_pktmbuf_pool_create(name, nb_mbufs, cache_size, DEFAULT_PRIV_SIZE, DEFAULT_MBUF_SIZE,
-                                 sid);
-    if (mp == NULL)
-        pktgen_log_panic(
-            "Cannot create mbuf pool (%s) port %d, nb_mbufs %d, socket_id %d: %s", name,
-            pid, nb_mbufs, sid, rte_strerror(rte_errno));
-
-    return mp;
-}
-#endif
-
 static void
 dump_device_info(void)
 {
@@ -352,6 +308,7 @@ pktgen_config_ports(void)
         /* Copy the first Src MAC address in SINGLE_PKT to the rest of the sequence packets. */
         for (int i = 0; i < NUM_SEQ_PKTS; i++)
             ethAddrCopy(&pinfo->seq_pkt[i].eth_src_addr, &pkt->eth_src_addr);
+        ethAddrCopy(&pinfo->seq_pkt[RANGE_PKT].eth_src_addr, &pkt->eth_src_addr);
         ethAddrCopy(&pinfo->seq_pkt[RATE_PKT].eth_src_addr, &pkt->eth_src_addr);
         ethAddrCopy(&pinfo->seq_pkt[LATENCY_PKT].eth_src_addr, &pkt->eth_src_addr);
         if (pktgen.verbose)

@@ -26,9 +26,11 @@
 void
 pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 {
+
     if (pkt->ipProto == PG_IPPROTO_TCP) {
         if (unlikely(range->tcp_seq_inc != 0)) {
             uint32_t seq = pkt->tcp_seq;
+
             seq += range->tcp_seq_inc;
             if (seq < range->tcp_seq_min)
                 seq = range->tcp_seq_max;
@@ -39,6 +41,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
             pkt->tcp_seq = range->tcp_seq;
         if (unlikely(range->tcp_ack_inc != 0)) {
             uint32_t ack = pkt->tcp_ack;
+
             ack += range->tcp_ack_inc;
             if (ack < range->tcp_ack_min)
                 ack = range->tcp_ack_max;
@@ -58,6 +61,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
             if (pkt->dport == PG_IPPROTO_L4_GTPU_PORT) {
                 if (unlikely(range->gtpu_teid_inc != 0)) {
                     uint32_t teid = pkt->gtpu_teid;
+
                     teid += range->gtpu_teid_inc;
                     if (teid < range->gtpu_teid_min)
                         teid = range->gtpu_teid_max;
@@ -70,6 +74,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->src_port_inc != 0)) {
                 uint32_t sport = pkt->sport;
+
                 sport += range->src_port_inc;
                 if (sport < range->src_port_min)
                     sport = range->src_port_max;
@@ -81,6 +86,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->dst_port_inc != 0)) {
                 uint32_t dport = pkt->dport;
+
                 dport += range->dst_port_inc;
                 if (dport < range->dst_port_min)
                     dport = range->dst_port_max;
@@ -103,6 +109,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->src_ip_inc != 0)) {
                 uint32_t p = pkt->ip_src_addr.addr.ipv4.s_addr;
+
                 p += range->src_ip_inc;
                 if (p < range->src_ip_min)
                     p = range->src_ip_max;
@@ -114,6 +121,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->dst_ip_inc != 0)) {
                 uint32_t p = pkt->ip_dst_addr.addr.ipv4.s_addr;
+
                 p += range->dst_ip_inc;
                 if (p < range->dst_ip_min)
                     p = range->dst_ip_max;
@@ -128,6 +136,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
                  * to maintain the range sequence in sync with other range fields */
                 uint32_t p;
                 static uint8_t min_vlan_set = 0;
+
                 if ((pkt->vlanid == MIN_VLAN_ID) && !min_vlan_set) {
                     p            = 0;
                     min_vlan_set = 1;
@@ -145,6 +154,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
             if (unlikely(range->cos_inc != 0)) {
                 uint32_t p;
                 static uint8_t min_cos_set = 0;
+
                 if ((pkt->cos == MIN_COS) && !min_cos_set) {
                     p           = 0;
                     min_cos_set = 1;
@@ -162,6 +172,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
             if (unlikely(range->tos_inc != 0)) {
                 uint32_t p;
                 static uint8_t min_tos_set = 0;
+
                 if ((pkt->tos == MIN_TOS) && !min_tos_set) {
                     p           = 0;
                     min_tos_set = 1;
@@ -178,6 +189,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->pkt_size_inc != 0)) {
                 uint32_t p = pkt->pkt_size;
+
                 p += range->pkt_size_inc;
                 if (p < range->pkt_size_min)
                     p = range->pkt_size_max;
@@ -256,6 +268,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->src_port_inc != 0)) {
                 uint16_t sport = pkt->sport;
+
                 sport += range->src_port_inc;
                 if (sport < range->src_port_min)
                     sport = range->src_port_max;
@@ -267,6 +280,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->dst_port_inc != 0)) {
                 uint16_t dport = pkt->dport;
+
                 dport += range->dst_port_inc;
                 if (dport < range->dst_port_min)
                     dport = range->dst_port_max;
@@ -278,6 +292,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->hop_limits_inc != 0)) {
                 uint8_t hop_limits = pkt->hop_limits;
+
                 hop_limits += range->hop_limits_inc;
                 if (hop_limits < range->hop_limits_min)
                     hop_limits = range->hop_limits_max;
@@ -289,6 +304,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(!inet6AddrIsUnspecified(range->src_ipv6_inc))) {
                 uint8_t p[PG_IN6ADDRSZ];
+
                 rte_memcpy(p, pkt->ip_src_addr.addr.ipv6.s6_addr, sizeof(struct in6_addr));
                 inet6AddrAdd(p, range->src_ipv6_inc, p);
                 if (memcmp(p, range->src_ipv6_min, sizeof(struct in6_addr)) < 0)
@@ -302,6 +318,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(!inet6AddrIsUnspecified(range->dst_ipv6_inc))) {
                 uint8_t p[PG_IN6ADDRSZ];
+
                 rte_memcpy(p, pkt->ip_dst_addr.addr.ipv6.s6_addr, sizeof(struct in6_addr));
                 inet6AddrAdd(p, range->dst_ipv6_inc, p);
                 if (memcmp(p, range->dst_ipv6_min, sizeof(struct in6_addr)) < 0)
@@ -318,6 +335,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
                  * to maintian the range sequence in sync with other range fields */
                 uint32_t p;
                 static uint8_t min_vlan_set = 0;
+
                 if ((pkt->vlanid == MIN_VLAN_ID) && !min_vlan_set) {
                     p            = 0;
                     min_vlan_set = 1;
@@ -335,6 +353,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
             if (unlikely(range->cos_inc != 0)) {
                 uint32_t p;
                 static uint8_t min_cos_set = 0;
+
                 if ((pkt->cos == MIN_COS) && !min_cos_set) {
                     p           = 0;
                     min_cos_set = 1;
@@ -352,6 +371,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
             if (unlikely(range->traffic_class_inc != 0)) {
                 uint32_t p;
                 static uint8_t min_traffic_class_set = 0;
+
                 if ((pkt->traffic_class == MIN_TOS) && !min_traffic_class_set) {
                     p                     = 0;
                     min_traffic_class_set = 1;
@@ -368,6 +388,7 @@ pktgen_range_ctor(range_info_t *range, pkt_seq_t *pkt)
 
             if (unlikely(range->pkt_size_inc != 0)) {
                 uint32_t p = pkt->pkt_size;
+
                 p += range->pkt_size_inc;
                 if (p < range->pkt_size_min)
                     p = range->pkt_size_max;
