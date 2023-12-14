@@ -19,7 +19,6 @@ sources = files(
 	'pktgen-port-cfg.c',
 	'pktgen-random.c',
 	'pktgen-range.c',
-	'pktgen-rate.c',
 	'pktgen-seq.c',
 	'pktgen-stats.c',
 	'pktgen-sys.c',
@@ -33,24 +32,9 @@ if get_option('enable_lua')
     sources += files('lpktgenlib.c')
 endif
 
-if get_option('enable_gui')
-    sources += files(
-        'pktgen-gui.c',
-        'pktgen-gui-misc.c',
-        'pktgen-gui-streams.c',
-    )
-endif
-
 cflags = ['-D__PROJECT_VERSION="' + meson.project_version() + '"']
 
 deps = [dpdk, common, utils, vec, plugin, cli, lua]
-
-if get_option('enable_gui')
-    deps += dependency('glib-2.0', required: true)
-    deps += dependency('gtk+-2.0', required: true)
-    cflags += '-Wno-deprecated-declarations'
-    cflags += '-DGUI'
-endif
 
 deps += [cc.find_library('rte_net_i40e', dirs: [dpdk_libs_path], required: false)]
 deps += [cc.find_library('rte_net_ixgbe', dirs: [dpdk_libs_path], required: false)]

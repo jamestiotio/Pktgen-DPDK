@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -17,6 +17,8 @@
 #include "pktgen-log.h"
 #include "pktgen-txbuff.h"
 #include "l2p.h"
+
+#include <rte_dev.h>
 
 #include <link.h>
 
@@ -67,19 +69,20 @@ static struct rte_eth_conf default_port_conf = {
 static void
 dump_device_info(void)
 {
-    printf("\n%-6s %-12s %-5s   %-5s PCI Information\n", "PortId", "DevName", "Index", "NUMA");
+    printf("\n%-4s %-16s %-5s %-4s %-17s %-17s %s\n", "Port", "DevName", "Index", "NUMA",
+           "PCI Information", "Src MAC", "Promiscuous");
 
     for (uint16_t i = 0; i < pktgen.nb_ports; i++) {
         struct rte_eth_dev_info dev;
         const struct rte_bus *bus = NULL;
+        port_info_t *pinfo;
+        pkt_seq_t *pkt;
         char buff[128];
 
         if (rte_eth_dev_info_get(i, &dev)) {
             printf(buff, sizeof(buff), "%6u No device information: %s", i, rte_strerror(rte_errno));
             continue;
         }
-        printf("   %2u: %-12s   %2d     %2d   ", i, dev.driver_name, dev.if_index,
-               rte_dev_numa_node(dev.device));
 
         buff[0] = 0;
         if (dev.device)
@@ -95,7 +98,14 @@ dump_device_info(void)
             snprintf(buff, sizeof(buff), "%s:%s/%s", vend, device, rte_dev_name(dev.device));
         } else
             snprintf(buff, sizeof(buff), "non-PCI device");
-        printf("%s\n", buff);
+        pinfo = l2p_get_port_pinfo(i);
+        pkt   = &pinfo->seq_pkt[SINGLE_PKT];
+        printf("%3u  %-16s %5d %4d %s %02x:%02x:%02x:%02x:%02x:%02x <%s>\n", i, dev.driver_name,
+               dev.if_index, rte_dev_numa_node(dev.device), buff, pkt->eth_src_addr.addr_bytes[0],
+               pkt->eth_src_addr.addr_bytes[1], pkt->eth_src_addr.addr_bytes[2],
+               pkt->eth_src_addr.addr_bytes[3], pkt->eth_src_addr.addr_bytes[4],
+               pkt->eth_src_addr.addr_bytes[5],
+               (pktgen.flags & PROMISCUOUS_ON_FLAG) ? "Enabled" : "Disabled");
     }
     printf("\n");
 }
@@ -129,8 +139,6 @@ pktgen_config_ports(void)
     if (pktgen.nb_ports > RTE_MAX_ETHPORTS)
         pktgen_log_panic("*** Too many ports in the system %d ***", pktgen.nb_ports);
 
-    dump_device_info();
-
     /* Setup the number of ports to display at a time */
     pktgen.ending_port =
         ((pktgen.nb_ports > pktgen.nb_ports_per_page) ? pktgen.nb_ports_per_page : pktgen.nb_ports);
@@ -149,9 +157,7 @@ pktgen_config_ports(void)
             if (!pinfo)
                 rte_exit(EXIT_FAILURE, "Cannot allocate memory for port_info_t\n");
 
-            pinfo->guard_word0 = 0x01010101;
-            pinfo->pid         = pid;
-            pinfo->guard_word1 = 0x02020202;
+            pinfo->pid = pid;
 
             pinfo->fill_pattern_type = ABC_FILL_PATTERN;
             snprintf(pinfo->user_pattern, sizeof(pinfo->user_pattern), "%s", "0123456789abcdef");
@@ -159,7 +165,7 @@ pktgen_config_ports(void)
             pinfo->seq_pkt = rte_zmalloc_socket(NULL, (sizeof(pkt_seq_t) * NUM_TOTAL_PKTS),
                                                 RTE_CACHE_LINE_SIZE, sid);
             if (pinfo->seq_pkt == NULL)
-                pktgen_log_panic("Unable to allocate %'d pkt_seq_t headers", NUM_TOTAL_PKTS);
+                pktgen_log_panic("Unable to allocate %'ld pkt_seq_t headers", NUM_TOTAL_PKTS);
 
             size_t pktsz = RTE_ETHER_MAX_LEN;
             if (pktgen.flags & JUMBO_PKTS_FLAG)
@@ -185,8 +191,6 @@ pktgen_config_ports(void)
             uint64_t ticks               = pktgen_get_timer_hz() / (uint64_t)1000000;
             lat->jitter_threshold_cycles = lat->jitter_threshold_us * ticks;
 
-            pktgen_rate_init(pinfo);
-
             l2p_set_port_pinfo(pid, pinfo);
         }
     }
@@ -201,9 +205,9 @@ pktgen_config_ports(void)
         /* grab the socket id value based on the pid being used. */
         sid = rte_eth_dev_socket_id(pid);
 
-        pktgen_log_info("Initialize Port %u on NUMA %u... ", pid, sid);
-
         rte_eth_dev_info_get(pid, &pinfo->dev_info);
+
+        pktgen_log_info("Initialize Port %u ... ", pid);
 
         /* Get a clean copy of the configuration structure */
         rte_memcpy(&conf, &default_port_conf, sizeof(struct rte_eth_conf));
@@ -243,7 +247,6 @@ pktgen_config_ports(void)
 
         if ((ret = rte_eth_macaddr_get(pid, &pkt->eth_src_addr)) < 0)
             rte_exit(EXIT_FAILURE, "Can't get MAC address: err=%d, port=%u\n", ret, pid);
-        rte_eth_macaddr_get(pid, &pinfo->seq_pkt[RATE_PKT].eth_src_addr);
 
         ret = rte_eth_dev_set_ptypes(pid, RTE_PTYPE_UNKNOWN, NULL, 0);
         if (ret < 0)
@@ -299,43 +302,17 @@ pktgen_config_ports(void)
                 rte_exit(EXIT_FAILURE, "Enabling promiscuous failed: %s\n",
                          rte_strerror(-rte_errno));
 
-        pktgen_log_info("   Src MAC %02x:%02x:%02x:%02x:%02x:%02x <Promiscuous is %s>",
-                        pkt->eth_src_addr.addr_bytes[0], pkt->eth_src_addr.addr_bytes[1],
-                        pkt->eth_src_addr.addr_bytes[2], pkt->eth_src_addr.addr_bytes[3],
-                        pkt->eth_src_addr.addr_bytes[4], pkt->eth_src_addr.addr_bytes[5],
-                        (pktgen.flags & PROMISCUOUS_ON_FLAG) ? "Enabled" : "Disabled");
-
         /* Copy the first Src MAC address in SINGLE_PKT to the rest of the sequence packets. */
         for (int i = 0; i < NUM_SEQ_PKTS; i++)
             ethAddrCopy(&pinfo->seq_pkt[i].eth_src_addr, &pkt->eth_src_addr);
         ethAddrCopy(&pinfo->seq_pkt[RANGE_PKT].eth_src_addr, &pkt->eth_src_addr);
-        ethAddrCopy(&pinfo->seq_pkt[RATE_PKT].eth_src_addr, &pkt->eth_src_addr);
         ethAddrCopy(&pinfo->seq_pkt[LATENCY_PKT].eth_src_addr, &pkt->eth_src_addr);
         if (pktgen.verbose)
             rte_eth_dev_info_dump(NULL, pid);
-    }
-    if (pktgen.verbose)
-        pktgen_log_info("%*sTotal memory used = %6lu KB", 70, " ",
-                        (pktgen.total_mem_used + 1023) / 1024);
-    else
-        pktgen_log_info("");
-
-    /* Start up the ports and display the port Link status */
-    RTE_ETH_FOREACH_DEV(pid)
-    {
-        /* Start device */
-        if ((ret = rte_eth_dev_start(pid)) < 0)
-            pktgen_log_panic("rte_eth_dev_start: port=%d, %s", pid, rte_strerror(-ret));
-    }
-
-    /* Start up the ports and display the port Link status */
-    RTE_ETH_FOREACH_DEV(pid)
-    {
-        pinfo = l2p_get_port_pinfo(pid);
 
         pinfo->seq_pkt[SINGLE_PKT].pkt_size  = RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN;
-        pinfo->seq_pkt[RATE_PKT].pkt_size    = RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN;
-        pinfo->seq_pkt[LATENCY_PKT].pkt_size = LATENCY_PKT_SIZE;
+        pinfo->seq_pkt[RANGE_PKT].pkt_size   = RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN;
+        pinfo->seq_pkt[LATENCY_PKT].pkt_size = RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN;
 
         /* Setup the port and packet defaults */
         for (uint8_t s = 0; s < NUM_TOTAL_PKTS; s++)
@@ -347,10 +324,16 @@ pktgen_config_ports(void)
         pktgen_clear_stats(pinfo);
 
         pktgen_rnd_bits_init(&pinfo->rnd_bitfields);
+
+        /* Start device */
+        if ((ret = rte_eth_dev_start(pid)) < 0)
+            pktgen_log_panic("rte_eth_dev_start: port=%d, %s", pid, rte_strerror(-ret));
     }
 
     /* Clear the log information by putting a blank line */
     pktgen_log_info("");
+
+    dump_device_info();
 
     /* Setup the packet capture per port if needed. */
     for (sid = 0; sid < coremap_cnt(0); sid++)

@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -94,28 +94,9 @@
     void single_set_latsampler_params(port_info_t * info, char *type, uint32_t num_samples,
                                       uint32_t sampling_rate, char outfile[]);
 
-    /* Rate */
-    char *rate_transmit_count_rate(int port, char *buff, int len);
-    void rate_set_tx_count(port_info_t * info, uint32_t cnt);
-    void rate_set_ipaddr(port_info_t * info, char type, struct pg_ipaddr *ip, int ip_ver);
-    void rate_set_proto(port_info_t * info, char *type);
-    void rate_set_dst_mac(port_info_t * info, struct rte_ether_addr * mac);
-    void rate_set_src_mac(port_info_t * info, struct rte_ether_addr * mac);
-    void rate_set_pkt_type(port_info_t * info, const char *type);
-    void rate_set_pkt_size(port_info_t * info, uint16_t size);
-    void rate_set_ttl_value(port_info_t * info, uint8_t ttl);
-    void rate_set_port_value(port_info_t * info, char type, uint32_t portValue);
-    void rate_set_tcp_seq(port_info_t * info, uint32_t seq);
-    void rate_set_tcp_ack(port_info_t * info, uint32_t ack);
-    void rate_set_tcp_flag_set(port_info_t * info, const char *which);
-    void rate_set_tcp_flag_clr(port_info_t * info, const char *which);
-    void rate_set_tx_burst(port_info_t * info, uint32_t burst);
-    void rate_set_rx_burst(port_info_t * info, uint32_t burst);
-
     /* Debug */
     void debug_dump(port_info_t * info, char *str);
     void debug_blink(port_info_t * info, uint32_t state);
-    void debug_pdump(port_info_t * info);
     void debug_set_tx_cycles(port_info_t * info, uint32_t cycles);
     void debug_set_rx_cycles(port_info_t * info, uint32_t cycles);
     void debug_matrix_dump(void);
@@ -145,7 +126,6 @@
     void enable_capture(port_info_t * info, uint32_t state);
     void enable_range(port_info_t * info, uint32_t state);
     void enable_pcap(port_info_t * info, uint32_t state);
-    void enable_rate(port_info_t * info, uint32_t state);
 
 #if defined(RTE_LIBRTE_PMD_BOND) || defined(RTE_NET_BOND)
     void enable_bonding(port_info_t * info, uint32_t state);

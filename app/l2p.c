@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2012-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2012-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -73,9 +73,6 @@ l2p_pktmbuf_create(const char *type, l2p_lport_t *lport, l2p_port_t *port, int n
     sz = nb_mbufs * DEFAULT_MBUF_SIZE;
     sz = RTE_ALIGN_CEIL(sz + sizeof(struct rte_mempool), 1024);
 
-    printf("  Create: '%-*s' - Memory used (MBUFs %6u x size %6u) = %6lu KB\n", 16, name, nb_mbufs,
-           DEFAULT_MBUF_SIZE, sz / 1024);
-
     pktgen.mem_used += sz;
     pktgen.total_mem_used += sz;
 
@@ -86,6 +83,9 @@ l2p_pktmbuf_create(const char *type, l2p_lport_t *lport, l2p_port_t *port, int n
         rte_exit(EXIT_FAILURE,
                  "Cannot create mbuf pool (%s) port %d, queue %d, nb_mbufs %d, NUMA %d: %s\n", name,
                  port->pid, lport->rx_qid, nb_mbufs, sid, rte_strerror(rte_errno));
+
+    pktgen_log_info("  Create: '%-*s' - Memory used (MBUFs %'6u x size %'6u) = %'8lu KB @ %p\n", 16,
+                    name, nb_mbufs, DEFAULT_MBUF_SIZE, sz / 1024, mp);
 
     return mp;
 }
@@ -291,6 +291,8 @@ l2p_parse_mappings(void)
     for (int i = 0; i < l2p->num_mappings; i++)
         if (parse_mapping(l2p->mappings[i]))
             return -1;
+    pktgen_log_info("%*sTotal memory used = %'8" PRIu64 " KB", 54, " ",
+                    (pktgen.total_mem_used + 1023) / 1024);
     return 0;
 }
 

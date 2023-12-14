@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2016-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2016-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -19,8 +19,9 @@ extern "C" {
 #define DEFAULT_LATENCY_RATE     (10000)   /**< micro-seconds*/
 #define MAX_LATENCY_RATE         (1000000) /**< micro-seconds */
 #define DEFAULT_LATENCY_ENTROPY  (0)       /**< default value to use in (SPORT + (i % N))  */
-#define LATENCY_PKT_SIZE         72        /**< Packet size */
-#define LATENCY_DPORT            1028      /**< Reserved */
+#define LATENCY_PKT_SIZE \
+    ((RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN) + sizeof(tstamp_t)) /**< Packet size */
+#define LATENCY_DPORT 1028                                       /**< Reserved */
 
 void pktgen_page_latency(void);
 

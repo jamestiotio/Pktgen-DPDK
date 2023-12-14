@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -52,7 +52,7 @@ typedef struct pkt_seq_s {
     uint32_t gre_key;      /**< GRE key if used */
 
     uint16_t pkt_size;   /**< Size of packet in bytes not counting FCS */
-    uint8_t seq_enabled; /**< Enable or disable this sequence through GUI */
+    uint8_t seq_enabled; /**< Enable or disable this sequence */
     union {
         uint8_t ttl;        /**< TTL value for IPv4 headers */
         uint8_t hop_limits; /**< Hop limits for IPv6 headers */

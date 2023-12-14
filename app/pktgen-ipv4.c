@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -73,7 +73,7 @@ void
 pktgen_send_ping4(uint32_t pid, uint8_t seq_idx)
 {
     port_info_t *pinfo = l2p_get_port_pinfo(pid);
-    pkt_seq_t *ppkt    = &pinfo->seq_pkt[PING_PKT];
+    pkt_seq_t *ppkt    = &pinfo->seq_pkt[SPECIAL_PKT];
     pkt_seq_t *spkt    = &pinfo->seq_pkt[seq_idx];
     struct rte_mbuf *m;
     l2p_port_t *port;
@@ -84,7 +84,7 @@ pktgen_send_ping4(uint32_t pid, uint8_t seq_idx)
         return;
     }
     *ppkt = *spkt; /* Copy the sequence setup to the ping setup. */
-    pktgen_packet_ctor(pinfo, PING_PKT, ICMP4_ECHO);
+    pktgen_packet_ctor(pinfo, SPECIAL_PKT, ICMP4_ECHO);
     rte_memcpy(rte_pktmbuf_mtod(m, uint8_t *), (uint8_t *)ppkt->hdr, ppkt->pkt_size);
 
     m->pkt_len  = ppkt->pkt_size;
