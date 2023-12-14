@@ -119,7 +119,7 @@ typedef struct pq_s { /* Port/Queue structure */
 
 typedef struct l2p_port_s {
     rte_atomic16_t inited;          /* Port initialized flag */
-    rte_spinlock_t tx_lock;         /* Tx port lock */
+    pthread_spinlock_t tx_lock;     /* Tx port lock */
     volatile uint16_t tx_inited;    /* Tx port initialized flag */
     uint16_t pid;                   /* Port ID attached to lcore */
     uint16_t num_rx_qids;           /* Number of Rx queues */

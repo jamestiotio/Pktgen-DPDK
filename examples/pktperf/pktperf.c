@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <alloca.h>
 #include <locale.h>
+#include <pthread.h>
 
 #include <pktperf.h>
 
@@ -130,13 +131,13 @@ tx_loop(void)
     DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u\n", rte_lcore_id(), port->pid,
               lport->tx_qid);
 
-    rte_spinlock_lock(&port->tx_lock);
+    pthread_spin_lock(&port->tx_lock);
     if (port->tx_inited == 0) {
         port->tx_inited = 1;
         /* iterate over all buffers in the pktmbuf pool and setup the packet data */
         rte_mempool_obj_iter(port->tx_mp, mbuf_iterate_cb, (void *)lport);
     }
-    rte_spinlock_unlock(&port->tx_lock);
+    pthread_spin_unlock(&port->tx_lock);
     burst_tsc = rte_rdtsc() + port->tx_cycles;
 
     while (!info->force_quit) {
@@ -169,13 +170,13 @@ rxtx_loop(void)
     DBG_PRINT("Starting loop for lcore:port:queue %3u:%2u:%2u.%2u\n", rte_lcore_id(), port->pid,
               lport->rx_qid, lport->tx_qid);
 
-    rte_spinlock_lock(&port->tx_lock);
+    pthread_spin_lock(&port->tx_lock);
     if (port->tx_inited == 0) {
         port->tx_inited = 1;
         /* iterate over all buffers in the pktmbuf pool and setup the packet data */
         rte_mempool_obj_iter(port->tx_mp, mbuf_iterate_cb, (void *)lport);
     }
-    rte_spinlock_unlock(&port->tx_lock);
+    pthread_spin_unlock(&port->tx_lock);
 
     burst_tsc = rte_rdtsc() + port->tx_cycles;
 
