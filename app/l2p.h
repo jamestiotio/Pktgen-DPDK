@@ -10,6 +10,7 @@
 #define __L2P_H
 
 #include <string.h>
+#include <pthread.h>
 
 #include <rte_memory.h>
 #include <rte_atomic.h>
@@ -35,7 +36,7 @@ enum { LCORE_MODE_UNKNOWN = 0, LCORE_MODE_RX = 1, LCORE_MODE_TX = 2, LCORE_MODE_
 struct port_info_s;
 
 typedef struct l2p_port_s {
-    rte_spinlock_t lock;                           /* Lock for this port */
+    pthread_spinlock_t lock;                       /* Lock for this port */
     struct port_info_s *pinfo;                     /* Port information pointer */
     uint16_t pid;                                  /* Port ID attached to lcore */
     uint16_t num_rx_qids;                          /* Number of Rx queues */

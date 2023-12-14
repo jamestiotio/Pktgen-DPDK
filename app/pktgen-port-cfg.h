@@ -12,7 +12,6 @@
 #include <string.h>
 #include <rte_version.h>
 #include <rte_atomic.h>
-#include <rte_spinlock.h>
 #include <rte_pci.h>
 #ifdef TX_DEBUG_PKT_DUMP
 #include "rte_hexdump.h"

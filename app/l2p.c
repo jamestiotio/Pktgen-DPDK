@@ -16,6 +16,7 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include <alloca.h>
+#include <pthread.h>
 
 #include <rte_version.h>
 #include <rte_config.h>
@@ -53,7 +54,7 @@ l2p_create(void)
     l2p = &l2p_info;
     for (int i = 0; i < RTE_MAX_ETHPORTS; i++) {
         l2p->ports[i].pid = RTE_MAX_ETHPORTS + 1;
-        rte_spinlock_init(&l2p->ports[i].lock);
+        pthread_spin_init(&l2p->ports[i].lock, PTHREAD_PROCESS_PRIVATE);
     }
 }
 

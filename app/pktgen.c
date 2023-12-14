@@ -330,7 +330,7 @@ pktgen_validate_pkt(rte_mbuf_t *mbuf)
     }
 
     if (dump) {
-        printf("*** %s (%u) %s ***\n", msg, pkt_len, mbuf->pool->name);
+        printf("*** %s (len %u) %s ***\n", msg, pkt_len, mbuf->pool->name);
         pg_pktmbuf_dump(stdout, mbuf, 64);
     }
     if (rte_pktmbuf_pkt_len(mbuf) > (RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN))
@@ -954,7 +954,7 @@ pktgen_setup_packets(uint16_t pid)
         rte_exit(EXIT_FAILURE, "Invalid l2p port for %d\n", pid);
 
     /* Make sure we are not updating the mempool from two different lcores */
-    rte_spinlock_lock(&port->lock);
+    pthread_spin_lock(&port->lock);
 
     if (pktgen_tst_port_flags(pinfo, SETUP_TRANSMIT_PKTS)) {
         pktgen_clr_port_flags(pinfo, SETUP_TRANSMIT_PKTS);
@@ -976,7 +976,7 @@ pktgen_setup_packets(uint16_t pid)
             rte_mempool_obj_iter(tx_mp, mempool_setup_cb, &s);
         }
     }
-    rte_spinlock_unlock(&port->lock);
+    pthread_spin_unlock(&port->lock);
 }
 
 /**
