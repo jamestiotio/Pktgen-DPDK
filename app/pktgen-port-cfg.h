@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -50,22 +50,21 @@ enum { /* Per port flag bits */
        SEND_PING6_REQUEST = (1 << 7), /**< Send a IPv6 Ping request */
 
        /* Exclusive Packet sending modes */
-       SEND_PCAP_PKTS    = (1 << 12), /**< Send a pcap file of packets */
-       SEND_RANGE_PKTS   = (1 << 13), /**< Send a range of packets */
-       SEND_SEQ_PKTS     = (1 << 14), /**< Send a sequence of packets */
-       SEND_SINGLE_PKTS  = (1 << 15), /**< Send a single packets */
-       SEND_RATE_PKTS    = (1 << 16), /**< Send rate pacing packets */
-       SEND_RANDOM_PKTS  = (1 << 17), /**< Send random bitfields in packets */
-       SEND_LATENCY_PKTS = (1 << 18), /**< Send latency packets */
+       SEND_SINGLE_PKTS = (1 << 12), /**< Send single packets */
+       SEND_PCAP_PKTS   = (1 << 13), /**< Send a pcap file of packets */
+       SEND_RANGE_PKTS  = (1 << 14), /**< Send range of packets */
+       SEND_SEQ_PKTS    = (1 << 15), /**< Send sequence of packets */
+       SEND_RANDOM_PKTS = (1 << 16), /**< Send random bitfields in packets */
 
        /* Exclusive Packet type modes */
-       SEND_VLAN_ID          = (1 << 20), /**< Send packets with VLAN ID */
-       SEND_MPLS_LABEL       = (1 << 21), /**< Send MPLS label */
-       SEND_Q_IN_Q_IDS       = (1 << 22), /**< Send packets with Q-in-Q */
-       SEND_GRE_IPv4_HEADER  = (1 << 23), /**< Encapsulate IPv4 in GRE */
-       SEND_GRE_ETHER_HEADER = (1 << 24), /**< Encapsulate Ethernet frame in GRE */
-       SEND_VXLAN_PACKETS    = (1 << 25), /**< Send VxLAN Packets */
-       SAMPLING_LATENCIES    = (1 << 26), /**< Sampling latency measurements> */
+       SEND_VLAN_ID          = (1 << 19), /**< Send packets with VLAN ID */
+       SEND_MPLS_LABEL       = (1 << 20), /**< Send MPLS label */
+       SEND_Q_IN_Q_IDS       = (1 << 21), /**< Send packets with Q-in-Q */
+       SEND_GRE_IPv4_HEADER  = (1 << 22), /**< Encapsulate IPv4 in GRE */
+       SEND_GRE_ETHER_HEADER = (1 << 23), /**< Encapsulate Ethernet frame in GRE */
+       SEND_VXLAN_PACKETS    = (1 << 24), /**< Send VxLAN Packets */
+       SAMPLING_LATENCIES    = (1 << 25), /**< Sampling latency measurements> */
+       SEND_LATENCY_PKTS     = (1 << 26), /**< Send latency packets in any mode */
 
        /* Sending flags */
        SETUP_TRANSMIT_PKTS    = (1 << 28), /**< Need to setup transmit packets */
@@ -77,8 +76,7 @@ enum { /* Per port flag bits */
            (SEND_ARP_REQUEST | SEND_GRATUITOUS_ARP | SEND_PING4_REQUEST | SEND_PING6_REQUEST)
 };
 
-#define EXCLUSIVE_MODES \
-    (SEND_PCAP_PKTS | SEND_RANGE_PKTS | SEND_SEQ_PKTS | SEND_RANDOM_PKTS | SEND_RATE_PKTS)
+#define EXCLUSIVE_MODES (SEND_SINGLE_PKTS | SEND_PCAP_PKTS | SEND_RANGE_PKTS | SEND_SEQ_PKTS)
 
 #define EXCLUSIVE_PKT_MODES                                                  \
     (SEND_VLAN_ID | SEND_VXLAN_PACKETS | SEND_MPLS_LABEL | SEND_Q_IN_Q_IDS | \
@@ -94,24 +92,6 @@ typedef enum {
 } fill_t;
 
 typedef void (*tx_func_t)(struct port_info_s *info, uint16_t qid);
-
-typedef struct {
-    uint16_t fps;                /**< Frame per second */
-    uint16_t vlines;             /**< Number of virtical lines */
-    uint16_t pixels;             /**< Number of pixels */
-    uint16_t color_bits;         /**< Number of color_bits */
-    uint16_t payload;            /**< Payload size */
-    uint16_t overhead;           /**< Overhead size */
-    uint32_t pad0;               /* Padding */
-    uint32_t bytes_per_vframe;   /**< Bytes per virtual frame */
-    uint32_t bits_per_sec;       /**< Bits per second */
-    uint32_t pkts_per_vframe;    /**< bytes_per_vframe/payload */
-    uint32_t total_pkts_per_sec; /**< pkts_per_vframe * fps */
-    double pps_rate;             /**< Packets per second rate */
-    uint64_t curr_tsc;           /**< Current timestamp value */
-    uint64_t cycles_per_pkt;     /**< Cycles per packet */
-    uint64_t next_tsc;           /**< Next TX burst in cycles */
-} rate_info_t;
 
 typedef struct {
     uint64_t data[MAX_LATENCY_ENTRIES]; /** Record for latencies */
@@ -131,6 +111,7 @@ typedef struct {
     MARKER stats;                     /* starting Marker to clear stats */
     uint64_t jitter_count;            /**< Number of jitter stats */
     uint64_t num_latency_pkts;        /**< Total number of latency packets */
+    uint64_t num_latency_tx_pkts;     /**< Total number of TX latency packets */
     uint64_t num_skipped;             /**< Number of skipped latency packets */
     uint64_t running_cycles;          /**< Running, Number of cycles per latency packet */
     uint64_t prev_cycles;             /**< previous cycles cyles time from last latency packet */
@@ -143,9 +124,7 @@ typedef struct {
 } latency_t;
 
 typedef struct port_info_s {
-    uint32_t guard_word0;
-    rte_atomic32_t port_flags; /**< Special send flags for ARP and other */
-    uint32_t guard_word1;
+    rte_atomic32_t port_flags;        /**< Special send flags for ARP and other */
     rte_atomic64_t transmit_count;    /**< Packets to transmit loaded into current_tx_count */
     rte_atomic64_t current_tx_count;  /**< Current number of packets to send */
     volatile uint64_t tx_cycles;      /**< Number cycles between TX bursts */
@@ -175,7 +154,6 @@ typedef struct port_info_s {
     struct rnd_bits_s *rnd_bitfields;     /**< Random bitfield settings */
     char user_pattern[USER_PATTERN_SIZE]; /**< User set pattern values */
     fill_t fill_pattern_type;             /**< Type of pattern to fill with */
-    rate_info_t rate;                     /**< Rate information */
 
     union {
         uint64_t vxlan; /**< VxLAN 64 bit word */
@@ -226,34 +204,7 @@ struct vxlan {
 };
 
 void pktgen_config_ports(void);
-
-static __inline__ void
-tx_send_packets(port_info_t *pinfo, uint16_t qid, struct rte_mbuf **pkts, uint16_t nb_pkts)
-{
-    if (nb_pkts) {
-        uint16_t sent, to_send = nb_pkts;
-
-        pinfo->queue_stats.q_opackets[qid] += nb_pkts;
-        for (int i = 0; i < nb_pkts; i++) {
-            pinfo->queue_stats.q_obytes[qid] += rte_pktmbuf_pkt_len(pkts[i]);
-
-#ifdef TX_DEBUG_PKT_DUMP
-            if (rte_pktmbuf_mtod(pkts[i], uint8_t *)[0] & 1) {
-                char buff[128];
-
-                snprintf(buff, sizeof(buff), "EtherHdr: Mempool '%s'\n", pkts[i]->pool->name);
-                rte_hexdump(stdout, buff, rte_pktmbuf_mtod(pkts[i], uint8_t *), 14);
-            }
-#endif
-        }
-
-        do {
-            sent = rte_eth_tx_burst(pinfo->pid, qid, pkts, to_send);
-            to_send -= sent;
-            pkts += sent;
-        } while (to_send > 0);
-    }
-}
+void tx_send_packets(port_info_t *pinfo, uint16_t qid, struct rte_mbuf **pkts, uint16_t nb_pkts);
 
 /**
  * Atomically subtract a 64-bit value from the tx counter.

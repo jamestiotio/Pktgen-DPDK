@@ -1,8 +1,8 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
- */
+TXlib */
 
 /* Created 2010 by Keith Wiles @ intel.com */
 
@@ -17,6 +17,7 @@
 #include <rte_net.h>
 #include <rte_arp.h>
 #include <rte_cycles.h>
+#include <rte_hexdump.h>
 
 #include "pktgen.h"
 #include "pktgen-gre.h"
@@ -32,7 +33,6 @@
 #include "pktgen-log.h"
 #include "pktgen-gtpu.h"
 #include "pktgen-sys.h"
-#include "pktgen-rate.h"
 
 #include <pthread.h>
 #include <sched.h>
@@ -44,6 +44,45 @@ double
 next_poisson_time(double rateParameter)
 {
     return -logf(1.0f - ((double)random()) / (double)(RAND_MAX)) / rateParameter;
+}
+
+/* dump a mbuf on console */
+static void
+pg_pktmbuf_dump(FILE *f, const struct rte_mbuf *m, unsigned dump_len)
+{
+    unsigned int len;
+    unsigned int nb_segs;
+
+    fprintf(f, "dump mbuf at %p, iova=%#" PRIx64 ", buf_len=%u, mempool '%s'\n", m,
+            rte_mbuf_iova_get(m), m->buf_len, m->pool->name);
+    fprintf(f, "  pkt_len=%u, ol_flags=%#" PRIx64 ", nb_segs=%u, port=%u", m->pkt_len, m->ol_flags,
+            m->nb_segs, m->port);
+
+    if (m->ol_flags & (RTE_MBUF_F_RX_QINQ | RTE_MBUF_F_TX_QINQ))
+        fprintf(f, ", vlan_tci_outer=%u", m->vlan_tci_outer);
+
+    if (m->ol_flags & (RTE_MBUF_F_RX_VLAN | RTE_MBUF_F_TX_VLAN))
+        fprintf(f, ", vlan_tci=%u", m->vlan_tci);
+
+    fprintf(f, ", ptype=%#" PRIx32 "\n", m->packet_type);
+
+    nb_segs = m->nb_segs;
+
+    while (m && nb_segs != 0) {
+        __rte_mbuf_sanity_check(m, 0);
+
+        fprintf(f, "  segment at %p, data=%p, len=%u, off=%u, refcnt=%u\n", m,
+                rte_pktmbuf_mtod(m, void *), m->data_len, m->data_off, rte_mbuf_refcnt_read(m));
+
+        len = dump_len;
+        if (len > m->data_len)
+            len = m->data_len;
+        if (len != 0)
+            rte_hexdump(f, NULL, rte_pktmbuf_mtod(m, void *), len);
+        dump_len -= len;
+        m = m->next;
+        nb_segs--;
+    }
 }
 
 /**
@@ -64,10 +103,9 @@ pktgen_wire_size(port_info_t *pinfo)
 
     if (pktgen_tst_port_flags(pinfo, SEND_PCAP_PKTS)) {
         pcap_info_t *pcap = l2p_get_pcap(pinfo->pid);
-        size              = WIRE_SIZE(pcap->max_pkt_size, uint64_t);
-    } else if (pktgen_tst_port_flags(pinfo, SEND_RATE_PKTS))
-        size = WIRE_SIZE(pinfo->seq_pkt[RATE_PKT].pkt_size, uint64_t);
-    else {
+
+        size = WIRE_SIZE(pcap->max_pkt_size, uint64_t);
+    } else {
         if (unlikely(pinfo->seqCnt > 0)) {
             for (i = 0; i < pinfo->seqCnt; i++)
                 size += WIRE_SIZE(pinfo->seq_pkt[i].pkt_size, uint64_t);
@@ -239,46 +277,85 @@ pktgen_tstamp_inject(port_info_t *pinfo, uint16_t qid)
     pkt_seq_t *pkt = &pinfo->seq_pkt[LATENCY_PKT];
     rte_mbuf_t *mbuf;
     l2p_port_t *port;
+    uint16_t sent;
 
-    port = l2p_get_port(pinfo->pid);
-    if (rte_mempool_get(port->special_mp, (void **)&mbuf) == 0) {
-        uint16_t pktsize = pkt->pkt_size;
+    uint64_t curr_ts = pktgen_get_time();
+    latency_t *lat   = &pinfo->latency;
 
-        rte_pktmbuf_reset(mbuf);
+    if (curr_ts >= lat->latency_timo_cycles) {
+        lat->latency_timo_cycles = curr_ts + lat->latency_rate_cycles;
 
-        mbuf->pkt_len  = pktsize;
-        mbuf->data_len = pktsize;
+        port = l2p_get_port(pinfo->pid);
+        if (rte_mempool_get(port->special_mp, (void **)&mbuf) == 0) {
+            uint16_t pktsize = pkt->pkt_size;
+            uint16_t to_send;
 
-        /* IPv4 Header constructor */
-        pktgen_packet_ctor(pinfo, LATENCY_PKT, -1);
+            mbuf->pkt_len  = pktsize;
+            mbuf->data_len = pktsize;
 
-        rte_memcpy(rte_pktmbuf_mtod(mbuf, uint8_t *), (uint8_t *)pkt->hdr, pktsize);
+            /* IPv4 Header constructor */
+            pktgen_packet_ctor(pinfo, LATENCY_PKT, -2);
 
-        tx_send_packets(pinfo, qid, &mbuf, 1);
-    } else
-        printf("*** No more latency buffers\n");
+            rte_memcpy(rte_pktmbuf_mtod(mbuf, uint8_t *), (uint8_t *)pkt->hdr, pktsize);
+
+            to_send = 1;
+            do {
+                sent = rte_eth_tx_burst(pinfo->pid, qid, &mbuf, to_send);
+                to_send -= sent;
+            } while (to_send > 0);
+
+            lat->num_latency_tx_pkts++;
+        } else
+            printf("*** No more latency buffers\n");
+    }
 }
 
-/**
- *
- * pktgen_send_burst - Send a burst of packet as fast as possible.
- *
- * DESCRIPTION
- * Transmit a burst of packets to a given port.
- *
- * RETURNS: N/A
- *
- * SEE ALSO:
- */
 static __inline__ void
-pktgen_send_burst(port_info_t *pinfo, uint16_t qid)
+pktgen_validate_pkt(rte_mbuf_t *mbuf)
 {
-    struct rte_mbuf *pkts[pinfo->tx_burst];
+    int dump         = 0;
+    const char *msg  = NULL;
+    uint16_t pkt_len = rte_pktmbuf_pkt_len(mbuf);
 
-    if (pktgen_tst_port_flags(pinfo, SEND_RANDOM_PKTS))
-        pktgen_rnd_bits_apply(pinfo, pkts, pinfo->tx_burst, NULL);
+    if (pkt_len > RTE_ETHER_MAX_LEN) {
+        dump = 1;
+        msg  = "Packet too long";
+    } else if (pkt_len < (RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN)) {
+        dump = 1;
+        msg  = "Packet too short";
+    }
 
-    tx_send_packets(pinfo, qid, pkts, pinfo->tx_burst);
+    if (dump) {
+        printf("*** %s (%u) %s ***\n", msg, pkt_len, mbuf->pool->name);
+        pg_pktmbuf_dump(stdout, mbuf, 64);
+    }
+    if (rte_pktmbuf_pkt_len(mbuf) > (RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN))
+        printf("%s: pkt_len %u Mempool '%s'\n", __func__, rte_pktmbuf_pkt_len(mbuf),
+               mbuf->pool->name);
+}
+
+void
+tx_send_packets(port_info_t *pinfo, uint16_t qid, struct rte_mbuf **pkts, uint16_t nb_pkts)
+{
+    if (nb_pkts) {
+        uint16_t sent, to_send = nb_pkts;
+
+        pinfo->queue_stats.q_opackets[qid] += nb_pkts;
+        for (int i = 0; i < nb_pkts; i++) {
+            pinfo->queue_stats.q_obytes[qid] += rte_pktmbuf_pkt_len(pkts[i]);
+
+            pktgen_validate_pkt(pkts[i]);
+        }
+
+        do {
+            sent = rte_eth_tx_burst(pinfo->pid, qid, pkts, to_send);
+            to_send -= sent;
+            pkts += sent;
+        } while (to_send > 0);
+
+        if (qid == 0 && pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS))
+            pktgen_tstamp_inject(pinfo, qid);
+    }
 }
 
 static __inline__ void
@@ -292,7 +369,7 @@ pktgen_tstamp_check(port_info_t *pinfo, struct rte_mbuf **pkts, uint16_t nb_pkts
 
     for (i = 0; i < nb_pkts; i++) {
 
-        if (pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS | SEND_RATE_PKTS)) {
+        if (pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS)) {
             tstamp_t *tstamp = pktgen_tstamp_pointer(pinfo, rte_pktmbuf_mtod(pkts[i], char *));
 
             if (tstamp->magic != TSTAMP_MAGIC)
@@ -310,7 +387,7 @@ pktgen_tstamp_check(port_info_t *pinfo, struct rte_mbuf **pkts, uint16_t nb_pkts
 
             lat->num_latency_pkts++;
 
-            if (pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS | SEND_RATE_PKTS)) {
+            if (pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS)) {
                 lat->running_cycles += cycles;
 
                 if (lat->min_cycles == 0 || cycles < lat->min_cycles)
@@ -364,9 +441,6 @@ pktgen_tstamp_check(port_info_t *pinfo, struct rte_mbuf **pkts, uint16_t nb_pkts
 static __inline__ void
 pktgen_tx_flush(port_info_t *pinfo, uint16_t qid)
 {
-    /* Flush any queued pkts to the driver. */
-    pktgen_send_burst(pinfo, qid);
-
     rte_eth_tx_done_cleanup(pinfo->pid, qid, 0);
 }
 
@@ -766,9 +840,6 @@ pktgen_send_special(port_info_t *pinfo)
 #endif
     }
 
-    printf("%s: %d.%d flags: 0x%08x\n", __func__, rte_lcore_id(), pinfo->pid,
-           rte_atomic32_read(&pinfo->port_flags));
-
     /* Send the requests from the Single packet setup. */
     if (unlikely(pktgen_tst_port_flags(pinfo, SEND_GRATUITOUS_ARP)))
         pktgen_send_arp(pinfo->pid, GRATUITOUS_ARP, SINGLE_PKT);
@@ -791,18 +862,14 @@ struct pkt_setup_s {
 };
 
 static __inline__ void
-pktgen_setup_cb(struct rte_mempool *mp __rte_unused, void *opaque, void *obj,
-                unsigned obj_idx __rte_unused)
+mempool_setup_cb(struct rte_mempool *mp __rte_unused, void *opaque, void *obj,
+                 unsigned obj_idx __rte_unused)
 {
     struct rte_mbuf *m    = (struct rte_mbuf *)obj;
-    union pktgen_data *d  = pktgen_data_field(m);
     struct pkt_setup_s *s = (struct pkt_setup_s *)opaque;
     port_info_t *pinfo    = s->pinfo;
     int32_t idx, seq_idx = s->seq_idx;
     pkt_seq_t *pkt;
-
-    /* Cleanup the mbuf data as virtio messes with the values */
-    rte_pktmbuf_reset(m);
 
     idx = seq_idx;
     if (pktgen_tst_port_flags(pinfo, SEND_SEQ_PKTS)) {
@@ -823,11 +890,6 @@ pktgen_setup_cb(struct rte_mempool *mp __rte_unused, void *opaque, void *obj,
 
     m->pkt_len  = pkt->pkt_size;
     m->data_len = pkt->pkt_size;
-
-    /* Save the information */
-    d->pkt_len  = m->pkt_len;
-    d->buf_len  = m->buf_len;
-    d->data_len = m->data_len;
 
     switch (pkt->ethType) {
     case RTE_ETHER_TYPE_IPV4:
@@ -904,14 +966,10 @@ pktgen_setup_packets(uint16_t pid)
                 idx = FIRST_SEQ_PKT;
             else if (pktgen_tst_port_flags(pinfo, (SEND_SINGLE_PKTS | SEND_RANDOM_PKTS)))
                 idx = SINGLE_PKT;
-            else if (pktgen_tst_port_flags(pinfo, SEND_RATE_PKTS))
-                idx = RATE_PKT;
-            else if (pktgen_tst_port_flags(pinfo, SEND_LATENCY_PKTS))
-                idx = LATENCY_PKT;
 
             s.pinfo   = pinfo;
             s.seq_idx = idx;
-            rte_mempool_obj_iter(tx_mp, pktgen_setup_cb, &s);
+            rte_mempool_obj_iter(tx_mp, mempool_setup_cb, &s);
         }
     }
     rte_spinlock_unlock(&port->lock);
@@ -932,8 +990,7 @@ static __inline__ void
 pktgen_send_pkts(port_info_t *pinfo, uint16_t qid, struct rte_mempool *mp)
 {
     uint64_t txCnt;
-    int mlen;
-    struct rte_mbuf *pkts[pinfo->tx_burst], **mbufs = pkts;
+    struct rte_mbuf *pkts[pinfo->tx_burst];
 
     if (!pktgen_tst_port_flags(pinfo, SEND_FOREVER)) {
         txCnt = pkt_atomic64_tx_count(&pinfo->current_tx_count, pinfo->tx_burst);
@@ -946,25 +1003,8 @@ pktgen_send_pkts(port_info_t *pinfo, uint16_t qid, struct rte_mempool *mp)
     } else
         txCnt = pinfo->tx_burst;
 
-    mlen = pg_pktmbuf_alloc_bulk(mp, mbufs, txCnt);
-    if (mlen)
-        tx_send_packets(pinfo, qid, mbufs, mlen);
-
-    if (qid == 0) {
-        uint32_t tstamp = pktgen_tst_port_flags(pinfo, (SEND_LATENCY_PKTS | SEND_RATE_PKTS));
-
-        if (tstamp) {
-            uint64_t curr_ts;
-            latency_t *lat = &pinfo->latency;
-
-            curr_ts = pktgen_get_time();
-            if (curr_ts >= lat->latency_timo_cycles) {
-                lat->latency_timo_cycles = curr_ts + lat->latency_rate_cycles;
-
-                pktgen_tstamp_inject(pinfo, qid);
-            }
-        }
-    }
+    if (rte_mempool_get_bulk(mp, (void **)pkts, txCnt) == 0)
+        tx_send_packets(pinfo, qid, pkts, txCnt);
 }
 
 /**
@@ -1085,7 +1125,8 @@ pktgen_main_rxtx_loop(void)
     rx_qid = l2p_get_rxqid(lid);
     tx_qid = l2p_get_txqid(lid);
 
-    printf("RX/TX lid %3d, pid %2d, qids %2d/%2d\n", lid, pinfo->pid, rx_qid, tx_qid);
+    printf("RX/TX lid %3d, pid %2d, qids %2d/%2d Mempool %-16s @ %p\n", lid, pinfo->pid, rx_qid,
+           tx_qid, l2p_get_tx_mp(pinfo->pid)->name, l2p_get_tx_mp(pinfo->pid));
 
     curr_tsc      = pktgen_get_time();
     tx_next_cycle = curr_tsc;
@@ -1143,8 +1184,8 @@ pktgen_main_tx_loop(void)
     pinfo  = l2p_get_pinfo_by_lcore(lid);
     tx_qid = l2p_get_txqid(lid);
 
-    printf("TX lid %3d, pid %2d, qid %2d, tx_mp %p\n", lid, pinfo->pid, tx_qid,
-           l2p_get_tx_mp(pinfo->pid));
+    printf("TX lid %3d, pid %2d, qid %2d, Mempool %-16s @ %p\n", lid, pinfo->pid, tx_qid,
+           l2p_get_tx_mp(pinfo->pid)->name, l2p_get_tx_mp(pinfo->pid));
 
     curr_tsc      = pktgen_get_time();
     tx_next_cycle = curr_tsc;
@@ -1200,8 +1241,8 @@ pktgen_main_rx_loop(void)
     pinfo  = l2p_get_pinfo_by_lcore(lid);
     rx_qid = l2p_get_rxqid(lid);
 
-    printf("RX lid %3d, pid %2d, qid %2d, rx_mp %p\n", lid, pinfo->pid, rx_qid,
-           l2p_get_rx_mp(pinfo->pid));
+    printf("RX lid %3d, pid %2d, qid %2d, Mempool %-16s @ %p\n", lid, pinfo->pid, rx_qid,
+           l2p_get_rx_mp(pinfo->pid)->name, l2p_get_rx_mp(pinfo->pid));
 
     while (pktgen.force_quit == 0)
         pktgen_main_receive(pinfo, rx_qid, pkts_burst, pinfo->rx_burst);
@@ -1279,8 +1320,6 @@ _page_display(void)
         pktgen_page_queue_stats(pktgen.curr_port);
     else if (pktgen.flags & XSTATS_PAGE_FLAG)
         pktgen_page_xstats(pktgen.curr_port);
-    else if (pktgen.flags & RATE_PAGE_FLAG)
-        pktgen_page_rate();
     else
         pktgen_page_stats();
 }

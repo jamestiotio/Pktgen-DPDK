@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -28,20 +28,6 @@
 #include "pktgen-display.h"
 #include "pktgen-log.h"
 #include "cli-functions.h"
-
-/* Offset to the mbuf dynamic field holding pktgen data. */
-int pktgen_dynfield_offset = -1;
-
-/* Descriptor used for the mbuf dynamic field configuration. */
-static const struct rte_mbuf_dynfield pktgen_dynfield_desc = {
-    .name  = "pktgen_dynfield_data",
-    .size  = sizeof(union pktgen_data),
-    .align = __alignof__(union pktgen_data),
-};
-
-#ifdef GUI
-int pktgen_gui_main(int argc, char *argv[]);
-#endif
 
 #ifdef LUA_ENABLED
 /**
@@ -242,11 +228,11 @@ pktgen_parse_args(int argc, char **argv)
             break;
 
         case 'G':
-            pktgen.flags |= (ENABLE_GUI_FLAG | IS_SERVER_FLAG);
+            pktgen.flags |= IS_SERVER_FLAG;
             break;
 
         case 'g': /* Define the port number and IP address used for the socket connection. */
-            pktgen.flags |= (ENABLE_GUI_FLAG | IS_SERVER_FLAG);
+            pktgen.flags |= IS_SERVER_FLAG;
 
             p = strchr(optarg, ':');
             if (p == NULL) /* No : symbol means pktgen is a server application. */
@@ -259,7 +245,7 @@ pktgen_parse_args(int argc, char **argv)
                     pktgen.hostname = (char *)strdupf(pktgen.hostname, optarg);
 
                 pktgen.socket_port = strtol(++p, NULL, 0);
-                pktgen_log_info(">>> Socket GUI support %s%c0x%x", pktgen.hostname, c,
+                pktgen_log_info(">>> Socket support %s%c0x%x", pktgen.hostname, c,
                                 pktgen.socket_port);
             }
             break;
@@ -430,11 +416,6 @@ main(int argc, char **argv)
 
     rte_timer_subsystem_init();
 
-    /* Configure pktgen data which will be encapsulated in the mbuf. */
-    pktgen_dynfield_offset = rte_mbuf_dynfield_register(&pktgen_dynfield_desc);
-    if (pktgen_dynfield_offset < 0)
-        rte_exit(EXIT_FAILURE, "Cannot register mbuf field\n");
-
     if (pktgen_cli_create()) {
         cli_destroy();
         scrn_destroy();
@@ -505,23 +486,6 @@ main(int argc, char **argv)
     pktgen_clear_display();
 
     pktgen_timer_setup();
-
-    if (pktgen.flags & ENABLE_GUI_FLAG) {
-        if (!scrn_is_paused()) {
-            scrn_pause();
-            scrn_cls();
-            scrn_setw(1);
-            scrn_pos(this_scrn->nrows, 1);
-        }
-#ifdef LUA_ENABLED
-        pktgen.ld_sock = lua_create_instance();
-
-        lua_start_socket(pktgen.ld_sock, &pktgen.thread, pktgen.hostname, pktgen.socket_port);
-#endif
-#ifdef GUI
-        pktgen_gui_main(argc, argv);
-#endif
-    }
 
     /* Unblock SIGWINCH so main thread
      * can handle screen resizes */

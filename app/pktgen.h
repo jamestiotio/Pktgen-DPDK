@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -76,7 +76,6 @@
 #include <pg_inet.h>
 #include <cksum.h>
 
-#include <mbuf.h>
 #include <coremap.h>
 #include <lscpu.h>
 #include <utils.h>
@@ -91,7 +90,6 @@
 #include "pktgen-log.h"
 #include "pktgen-latency.h"
 #include "pktgen-random.h"
-#include "pktgen-rate.h"
 #include "pktgen-seq.h"
 #include "pktgen-version.h"
 
@@ -223,11 +221,9 @@ enum {
 
     FIRST_SEQ_PKT  = 0,
     SINGLE_PKT     = (FIRST_SEQ_PKT + NUM_SEQ_PKTS), /* 16 */
-    PING_PKT       = (SINGLE_PKT + 1),               /* 17 */
-    RANGE_PKT      = (PING_PKT + 1),                 /* 18 */
-    DUMP_PKT       = (RANGE_PKT + 1),                /* 19 */
-    RATE_PKT       = (DUMP_PKT + 1),                 /* 20 */
-    LATENCY_PKT    = (RATE_PKT + 1),                 /* 21 */
+    SPECIAL_PKT    = (SINGLE_PKT + 1),               /* 17 */
+    RANGE_PKT      = (SPECIAL_PKT + 1),              /* 18 */
+    LATENCY_PKT    = (RANGE_PKT + 1),                /* 19 */
     NUM_TOTAL_PKTS = (LATENCY_PKT + 1),
 
     INTER_FRAME_GAP       = 12, /**< in bytes */
@@ -261,9 +257,8 @@ typedef struct pktgen_s {
     volatile int force_quit;               /**< Flag to force quit */
     struct cmdline *cl;                    /**< Command Line information pointer */
     char *argv[64];                        /**< Argument list */
-    char *hostname;                        /**< GUI hostname */
-    int32_t socket_port;                   /**< GUI port number */
-    volatile uint8_t is_gui_running;       /**< flag to denote GUI is running */
+    char *hostname;                        /**< hostname */
+    int32_t socket_port;                   /**< port number */
     volatile uint8_t timer_running;        /**< flag to denote timer is running */
     uint16_t ident;                        /**< IPv4 ident value */
     uint16_t last_row;                     /**< last static row of the screen */
@@ -298,13 +293,13 @@ typedef struct pktgen_s {
     capture_t capture[RTE_MAX_NUMA_NODES]; /**< Packet capture, 1 struct per socket */
 } pktgen_t;
 
-enum {                                     /* Pktgen flags bits */
-       PRINT_LABELS_FLAG      = (1 << 0),  /**< Print constant labels on stats display */
-       MAC_FROM_ARP_FLAG      = (1 << 1),  /**< Configure the SRC MAC from a ARP request */
-       PROMISCUOUS_ON_FLAG    = (1 << 2),  /**< Enable promiscuous mode */
-       NUMA_SUPPORT_FLAG      = (1 << 3),  /**< Enable NUMA support */
-       IS_SERVER_FLAG         = (1 << 4),  /**< Pktgen is a Server */
-       ENABLE_GUI_FLAG        = (1 << 5),  /**< GUI support is enabled */
+enum {                                    /* Pktgen flags bits */
+       PRINT_LABELS_FLAG      = (1 << 0), /**< Print constant labels on stats display */
+       MAC_FROM_ARP_FLAG      = (1 << 1), /**< Configure the SRC MAC from a ARP request */
+       PROMISCUOUS_ON_FLAG    = (1 << 2), /**< Enable promiscuous mode */
+       NUMA_SUPPORT_FLAG      = (1 << 3), /**< Enable NUMA support */
+       IS_SERVER_FLAG         = (1 << 4), /**< Pktgen is a Server */
+       RESERVED_05            = (1 << 5),
        LUA_SHELL_FLAG         = (1 << 6),  /**< Enable Lua Shell */
        TX_DEBUG_FLAG          = (1 << 7),  /**< TX Debug output */
        Not_USED               = (1 << 8),  /**< Not Used */
@@ -325,7 +320,6 @@ enum {                                     /* Pktgen flags bits */
        LATENCY_PAGE_FLAG      = (1 << 23), /**< Display latency page */
        STATS_PAGE_FLAG        = (1 << 24), /**< Display the physical port stats */
        XSTATS_PAGE_FLAG       = (1 << 25), /**< Display the physical port stats */
-       RATE_PAGE_FLAG         = (1 << 26), /**< Display the Rate Pacing stats */
        RESERVED_27            = (1 << 27),
        RESERVED_28            = (1 << 28),
        RESERVED_29            = (1 << 29),
@@ -339,7 +333,7 @@ enum {                                     /* Pktgen flags bits */
 #define PAGE_MASK_BITS                                                                          \
     (CPU_PAGE_FLAG | SEQUENCE_PAGE_FLAG | RANGE_PAGE_FLAG | PCAP_PAGE_FLAG | SYSTEM_PAGE_FLAG | \
      RND_BITFIELD_PAGE_FLAG | LOG_PAGE_FLAG | LATENCY_PAGE_FLAG | XSTATS_PAGE_FLAG |            \
-     STATS_PAGE_FLAG | RATE_PAGE_FLAG)
+     STATS_PAGE_FLAG)
 
 extern pktgen_t pktgen;
 
@@ -414,7 +408,7 @@ pktgen_clr_port_flags(port_info_t *pinfo, uint32_t flags)
 static __inline__ int
 pktgen_tst_port_flags(port_info_t *pinfo, uint32_t flags)
 {
-    return (rte_atomic32_read(&pinfo->port_flags) & flags) ? 1 : 0;
+    return ((rte_atomic32_read(&pinfo->port_flags) & flags) ? 1 : 0);
 }
 
 /* onOff values */

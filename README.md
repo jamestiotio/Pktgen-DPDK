@@ -7,7 +7,7 @@ Pktgen - Traffic Generator powered by DPDK
 
 ---
 ```
-**Copyright &copy; \<2010-2023\>, Intel Corporation. All rights reserved.**
+**Copyright &copy; \<2010-2024\>, Intel Corporation. All rights reserved.**
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 SPDX-License-Identifier: BSD-3-Clause
 
-Pktgen: Created 2010-2023 by Keith Wiles @ Intel.com
+Pktgen: Created 2010-2024 by Keith Wiles @ Intel.com
 ```
 ---
 Pktgen documentation can be found here: https://pktgen.github.io/Pktgen-DPDK/
@@ -157,7 +157,7 @@ You can also just send Pktgen a script file and display the ouptut.
 
     Lua Version: Lua 5.3
     Pktgen Version : 3.6.1
-    Pktgen Copyright : Copyright(c) `<2010-2023>`, Intel Corporation
+    Pktgen Copyright : Copyright(c) `<2010-2024>`, Intel Corporation
     Pktgen Authors : Keith Wiles @ Intel Corporation
 
 Hello World!!!!
@@ -186,7 +186,7 @@ disk where Pktgen is running and then we execute the file with 'f()'.
     f()
     Lua Version: Lua 5.3
     Pktgen Version : 3.6.1
-    Pktgen Copyright : Copyright(c) `<2010-2023>`, Intel Corporation
+    Pktgen Copyright : Copyright(c) `<2010-2024>`, Intel Corporation
     Pktgen Authors : Keith Wiles @ Intel Corporation
 
     Hello World!!!!
@@ -200,7 +200,7 @@ You can also just send it commands via echo.
     $ echo "f,e = loadfile('test/hello-world.lua'); f();"| socat - TCP4:172.25.40.163:22022
     Lua Version: Lua 5.3
     Pktgen Version : 3.6.1
-    Pktgen Copyright : Copyright(c) `<2010-2023>`, Intel Corporation
+    Pktgen Copyright : Copyright(c) `<2010-2024>`, Intel Corporation
     Pktgen Authors : Keith Wiles @ Intel Corporation
 
     Hello World!!!!

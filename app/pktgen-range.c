@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -757,10 +757,10 @@ pktgen_range_setup(port_info_t *pinfo)
     range->tos_min = MIN_TOS;
     range->tos_max = MAX_TOS;
 
-    range->pkt_size     = RTE_ETHER_MIN_LEN;
+    range->pkt_size     = (RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN);
     range->pkt_size_inc = 0;
-    range->pkt_size_min = RTE_ETHER_MIN_LEN;
-    range->pkt_size_max = RTE_ETHER_MAX_LEN;
+    range->pkt_size_min = (RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN);
+    range->pkt_size_max = (RTE_ETHER_MAX_LEN - RTE_ETHER_CRC_LEN);
 
     range->vxlan_gid     = pinfo->seq_pkt[SINGLE_PKT].group_id;
     range->vxlan_gid_inc = 0;
@@ -786,7 +786,7 @@ pktgen_range_setup(port_info_t *pinfo)
     range->tcp_ack_min = 0;
     range->tcp_ack_max = MAX_TCP_ACK_NUMBER;
 
-    pinfo->seq_pkt[RANGE_PKT].pkt_size = RTE_ETHER_MIN_LEN - RTE_ETHER_CRC_LEN;
+    pinfo->seq_pkt[RANGE_PKT].pkt_size = range->pkt_size;
 
     inet_mtoh64(&pinfo->seq_pkt[SINGLE_PKT].eth_dst_addr, &range->dst_mac);
     memset(&range->dst_mac_inc, 0, sizeof(range->dst_mac_inc));

@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2020-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2020-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -1025,7 +1025,6 @@ static const char *enable_help[] = {
     "current working directory.",
     "enable|disable <portlist> bonding  - Enable call TX with zero packets for bonding driver",
     "enable|disable <portlist> vxlan    - Send VxLAN packets",
-    "enable|disable <portlist> rate     - Enable/Disable Rate Packing on given ports",
     "enable|disable mac_from_arp        - Enable/disable MAC address from ARP packet",
     "enable|disable clock_gettime       - Enable/disable use of new clock_gettime() instead of rdtsc()",
     "enable|disable screen              - Enable/disable updating the screen and unlock/lock window"
@@ -1108,9 +1107,6 @@ en_dis_cmd(int argc, char **argv)
         case 14:
             foreach_port(portlist, enable_vxlan(pinfo, state));
             break;
-        case 15:
-            foreach_port(portlist, enable_rate(pinfo, state));
-            break;
         default:
             return cli_cmd_error("Enable/Disable invalid command", "Enable", argc, argv);
         }
@@ -1142,7 +1138,6 @@ static struct cli_map dbg_map[] = {
     {20, "dbg %|tx_dbg|dbg"},
     {21, "dbg tx_rate %P"},
     {30, "dbg %|mempool|dump %P %s"},
-    {40, "dbg pdump %P"},
     {50, "dbg memzone"},
     {51, "dbg memseg"},
     {60, "dbg hexdump %H %d"},
@@ -1160,8 +1155,6 @@ static const char *dbg_help[] = {
     "dbg tx_rate <portlist>           - Show packet rate for all ports",
     "dbg mempool|dump <portlist> <type> - Dump out the mempool info for a given type",
     "                                   types - rx|tx",
-    "dbg pdump <portlist>             - Hex dump the first packet to be sent, single packet mode "
-    "only",
     "dbg memzone                      - List all of the current memzones",
     "dbg memseg                       - List all of the current memsegs",
     "dbg hexdump <addr> <len>         - hex dump memory at given address",
@@ -1238,11 +1231,6 @@ dbg_cmd(int argc, char **argv)
     case 30:
         portlist_parse(argv[2], pktgen.nb_ports, &portlist);
         foreach_port(portlist, debug_mempool_dump(pinfo, argv[3]));
-        break;
-    case 40:
-        portlist_parse(argv[2], pktgen.nb_ports, &portlist);
-        foreach_port(portlist, debug_pdump(pinfo));
-        pktgen_update_display();
         break;
     case 50:
         rte_memzone_dump(stdout);
@@ -1735,7 +1723,7 @@ misc_cmd(int argc, char **argv)
 static struct cli_map page_map[] = {
     {10, "page %d"},
     {11, "page %|main|range|cpu|pcap|system|sys|next|sequence|seq|rnd|"
-         "log|latency|lat|stats|xstats|rate|rate-pacing"},
+         "log|latency|lat|stats|xstats"},
     {-1, NULL}
 };
 
@@ -1758,7 +1746,6 @@ static const char *page_help[] = {
     "page latency | lat                 - Display the latency page",
     "page stats                         - Display physical ports stats for all ports",
     "page xstats                        - Display port XSTATS values",
-    "page rate                          - Display Rate Pacing values",
     CLI_HELP_PAUSE,
     NULL
 };
@@ -1903,218 +1890,6 @@ bonding_cmd(int argc, char **argv)
 }
 #endif
 
-#define rate_types      \
-    "count|"   /*  0 */ \
-    "size|"    /*  1 */ \
-    "burst|"   /*  2 */ \
-    "sport|"   /*  3 */ \
-    "dport|"   /*  4 */ \
-    "ttl|"     /*  5 */ \
-    "txburst|" /*  6 */ \
-    "rxburst"  /*  7 */
-
-// clang-format off
-static struct cli_map rate_map[] = {
-    {10, "rate %P %|" rate_types " %d"},
-    {20, "rate %P type %|arp|ipv4|ipv6|ip4|ip6|vlan"},
-    {21, "rate %P proto %|udp|tcp|icmp"},
-    {22, "rate %P src mac %m"},
-    {23, "rate %P dst mac %m"},
-    {30, "rate %P src ip %4"},
-    {31, "rate %P dst ip %4"},
-    {32, "rate %P src ip %6"},
-    {33, "rate %P dst ip %6"},
-    {34, "rate %P tcp flag set %|urg|ack|psh|rst|syn|fin|all"},
-    {35, "rate %P tcp flag clr %|urg|ack|psh|rst|syn|fin|all"},
-    {36, "rate %P tcp seq %u"},
-    {37, "rate %P tcp ack %u"},
-    {40, "rate %P fps %d"},
-    {45, "rate %P lines %d"},
-    {46, "rate %P pixels %d"},
-    {50, "rate %P color bits %d"},
-    {60, "rate %P payload size %d"},
-    {70, "rate %P overhead %d"},
-    {-1, NULL}
-};
-// clang-format on
-
-static const char *rate_help[] = {
-    "",
-    "rate <portlist> count <value>        - number of packets to transmit",
-    "rate <portlist> size <value>         - size of the packet to transmit",
-    "rate <portlist> rate <percent>       - Packet rate in percentage",
-    "rate <portlist> txburst|burst <value> - number of packets in a Tx burst",
-    "rate <portlist> rxburst <value>      - number of packets in a Rx burst",
-    "rate <portlist> sport <value>        - Source port number for UDP/TCP",
-    "rate <portlist> dport <value>        - Destination port number for UDP/TCP",
-    "rate <portlist> ttl <value>          - Set the TTL value for the single port more",
-    "rate <portlist> src|dst mac <addr>   - Set MAC addresses 00:11:22:33:44:55 or 0011:2233:4455 "
-    "format",
-    "rate <portlist> type ipv4|ipv6|vlan|arp - Set the packet type to IPv4 or IPv6 or VLAN",
-    "rate <portlist> proto udp|tcp|icmp   - Set the packet protocol to UDP or TCP or ICMP per port",
-    "rate <portlist> [src|dst] ip ipaddr  - Set IP addresses, Source must include network mask "
-    "e.g. 10.1.2.3/24",
-
-    "rate <portlist> tcp flag set urg|ack|psh|rst|syn|fin|all - Set a TCP flag",
-    "rate <portlist> tcp flag clr urg|ack|psh|rst|syn|fin|all - Clear a TCP flag",
-    "rate <portlist> tcp seq <sequence> - Set the TCP sequence number",
-    "rate <portlist> tcp ack <acknowledge> - Set the TCP acknowledge number",
-
-    "rate <portlist> fps <value>          - Set the frame per second value e.g. 60fps",
-    "rate <portlist> lines <value>        - Set the number of video lines, e.g. 720",
-    "rate <portlist> pixels <value>       - Set the number of pixels per line, e.g. 1280",
-    "rate <portlist> color bits <value>   - Set the color bit size 8, 16, 24, ...",
-    "rate <portlist> payload size <value> - Set the payload size",
-    "rate <portlist> overhead <value>     - Set the packet overhead + payload = total packet size",
-    CLI_HELP_PAUSE,
-    NULL};
-
-static int
-rate_cmd(int argc, char **argv)
-{
-    struct cli_map *m;
-    char *what, *p;
-    struct rte_ether_addr mac;
-    struct pg_ipaddr ip;
-    portlist_t portlist;
-    int value, n, ip_ver;
-
-    m = cli_mapping(rate_map, argc, argv);
-    if (!m)
-        return cli_cmd_error("Rate invalid command", "Rate", argc, argv);
-
-    portlist_parse(argv[1], pktgen.nb_ports, &portlist);
-
-    what  = argv[2];
-    value = atoi(argv[3]);
-
-    switch (m->index) {
-    case 10:
-        n = cli_map_list_search(m->fmt, argv[2], 2);
-        foreach_port(portlist, _do(switch (n) {
-                         case 0:
-                             rate_set_tx_count(pinfo, value);
-                             break;
-                         case 1:
-                             rate_set_pkt_size(pinfo, atoi(argv[3]));
-                             break;
-                         case 2:
-                             rate_set_tx_burst(pinfo, value);
-                             break;
-                         case 3:
-                             rate_set_port_value(pinfo, what[0], value);
-                             break;
-                         case 4:
-                             rate_set_port_value(pinfo, what[0], value);
-                             break;
-                         case 5:
-                             rate_set_ttl_value(pinfo, value);
-                             break;
-                         case 6:
-                             rate_set_tx_burst(pinfo, value);
-                             break;
-                         case 7:
-                             rate_set_rx_burst(pinfo, value);
-                             break;
-                         default:
-                             return cli_cmd_error("Set rate command is invalid", "Rate", argc,
-                                                  argv);
-                     }));
-        break;
-    case 20:
-        foreach_port(portlist, rate_set_pkt_type(pinfo, argv[3]));
-        break;
-    case 21:
-        foreach_port(portlist, rate_set_proto(pinfo, argv[3]));
-        break;
-    case 22:
-        if (pg_ether_aton(argv[4], &mac) == NULL) {
-            cli_printf("Failed to parse MAC address from (%s)\n", argv[4]);
-            break;
-        }
-        foreach_port(portlist, rate_set_src_mac(pinfo, &mac));
-        break;
-    case 23:
-        if (pg_ether_aton(argv[4], &mac) == NULL) {
-            cli_printf("Failed to parse MAC address from (%s)\n", argv[4]);
-            break;
-        }
-        foreach_port(portlist, rate_set_dst_mac(pinfo, &mac));
-        break;
-    case 30:
-        p = strchr(argv[4], '/');
-        if (!p)
-            cli_printf("src IP address should contain /NN subnet value, default /32\n");
-
-        ip_ver = _atoip(argv[4], PG_IPADDR_V4 | PG_IPADDR_NETWORK, &ip, sizeof(ip));
-        foreach_port(portlist, rate_set_ipaddr(pinfo, 's', &ip, ip_ver));
-        break;
-    case 31:
-        /* Remove the /XX mask value if supplied */
-        p = strchr(argv[4], '/');
-        if (p) {
-            cli_printf("Subnet mask not required, removing subnet mask value\n");
-            *p = '\0';
-        }
-        ip_ver = _atoip(argv[4], PG_IPADDR_V4, &ip, sizeof(ip));
-        foreach_port(portlist, rate_set_ipaddr(pinfo, 'd', &ip, ip_ver));
-        break;
-    case 32:
-        p = strchr(argv[4], '/');
-        if (!p)
-            cli_printf("src IP address should contain /NN subnet value, default /128\n");
-
-        ip_ver = _atoip(argv[4], PG_IPADDR_V6 | PG_IPADDR_NETWORK, &ip, sizeof(ip));
-        foreach_port(portlist, rate_set_ipaddr(pinfo, 's', &ip, ip_ver));
-        break;
-    case 33:
-        /* Remove the /XX mask value if supplied */
-        p = strchr(argv[4], '/');
-        if (p) {
-            cli_printf("Subnet mask not required, removing subnet mask value\n");
-            *p = '\0';
-        }
-        ip_ver = _atoip(argv[4], PG_IPADDR_V6, &ip, sizeof(ip));
-        foreach_port(portlist, rate_set_ipaddr(pinfo, 'd', &ip, ip_ver));
-        break;
-    case 34:
-        foreach_port(portlist, rate_set_tcp_flag_set(pinfo, argv[5]));
-        break;
-    case 35:
-        foreach_port(portlist, rate_set_tcp_flag_clr(pinfo, argv[5]));
-        break;
-    case 36:
-        foreach_port(portlist, rate_set_tcp_seq(pinfo, atoi(argv[4])));
-        break;
-    case 37:
-        foreach_port(portlist, rate_set_tcp_ack(pinfo, atoi(argv[4])));
-        break;
-    case 40: /* fps */
-        foreach_port(portlist, rate_set_value(pinfo, "fps", atoi(argv[3])));
-        break;
-    case 45: /* lines */
-        foreach_port(portlist, rate_set_value(pinfo, "lines", atoi(argv[3])));
-        break;
-    case 46: /* pixels */
-        foreach_port(portlist, rate_set_value(pinfo, "pixels", atoi(argv[3])));
-        break;
-    case 50: /* color bits */
-        foreach_port(portlist, rate_set_value(pinfo, "color", atoi(argv[4])));
-        break;
-    case 60: /* payload size */
-        foreach_port(portlist, rate_set_value(pinfo, "payload", atoi(argv[4])));
-        break;
-    case 70: /* overhead */
-        foreach_port(portlist, rate_set_value(pinfo, "overhead", atoi(argv[3])));
-        break;
-    default:
-        return cli_cmd_error("Rate invalid command", "Rate", argc, argv);
-    }
-
-    pktgen_update_display();
-    return 0;
-}
-
 // clang-format off
 static struct cli_map latency_map[] = {
     {10, "latency %P rate %u"},
@@ -2212,7 +1987,6 @@ static struct cli_tree default_tree[] = {
 #if defined(RTE_LIBRTE_PMD_BOND) || defined(RTE_NET_BOND)
     c_cmd("bonding", bonding_cmd, "Bonding commands"),
 #endif
-    c_cmd("rate", rate_cmd, "Rate setup commands"),
     c_cmd("latency", latency_cmd, "Latency setup commands"),
 
     c_alias("on", "enable screen", "Enable screen updates"),
@@ -2244,7 +2018,6 @@ init_tree(void)
     cli_help_add("Misc", misc_map, misc_help);
     cli_help_add("Theme", theme_map, theme_help);
     cli_help_add("Plugin", plugin_map, plugin_help);
-    cli_help_add("Rate", rate_map, rate_help);
     cli_help_add("Latency", latency_map, latency_help);
 #if defined(RTE_LIBRTE_PMD_BOND) || defined(RTE_NET_BOND)
     cli_help_add("Bonding", bonding_map, bonding_help);

@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2010-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -384,8 +384,6 @@ pktgen_pcap_mbuf_ctor(struct rte_mempool *mp, void *opaque_arg, void *_m, unsign
     m->next = NULL;
 
     for (;;) {
-        union pktgen_data *d = pktgen_data_field(m);
-
         if ((i & 0x3ff) == 0) {
             scrn_printf(1, 1, "%c\b", "-\\|/"[(i >> 10) & 3]);
             i++;
@@ -409,10 +407,6 @@ pktgen_pcap_mbuf_ctor(struct rte_mempool *mp, void *opaque_arg, void *_m, unsign
 
         m->data_len = len;
         m->pkt_len  = len;
-
-        d->pkt_len  = len;
-        d->data_len = len;
-        d->buf_len  = m->buf_len;
 
         rte_memcpy((uint8_t *)m->buf_addr + m->data_off, buffer, len);
         break;

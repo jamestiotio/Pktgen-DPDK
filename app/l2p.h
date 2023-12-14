@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2012-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2012-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -291,7 +291,7 @@ l2p_set_pcap_info(uint16_t pid, pcap_info_t *pcap_info)
 {
     l2p_t *l2p = l2p_get();
 
-    if (pid >= RTE_MAX_ETHPORTS && l2p->ports[pid].pid >= RTE_MAX_ETHPORTS)
+    if (pid >= RTE_MAX_ETHPORTS || l2p->ports[pid].pid >= RTE_MAX_ETHPORTS)
         return -1;
     l2p->ports[pid].pcap_info = pcap_info;
     return 0;

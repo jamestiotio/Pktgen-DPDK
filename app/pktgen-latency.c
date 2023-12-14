@@ -1,5 +1,5 @@
 /*-
- * Copyright(c) <2016-2023>, Intel Corporation. All rights reserved.
+ * Copyright(c) <2016-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -83,7 +83,8 @@ pktgen_print_static_data(void)
     scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "Latency:");
     scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Rate (us)");
     scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Entropy");
-    scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Total Pkts");
+    scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Total RX Pkts");
+    scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Total TX Pkts");
     scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Skipped Pkts");
     scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Cycles/Minimum(us)");
     scrn_printf(row++, 1, "%-*s", COLUMN_WIDTH_0, "  Cycles/Average(us)");
@@ -299,6 +300,9 @@ pktgen_page_latency(void)
         snprintf(buff, sizeof(buff), "%'" PRIu64, lat->num_latency_pkts);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
+        snprintf(buff, sizeof(buff), "%'" PRIu64, lat->num_latency_tx_pkts);
+        scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
+
         snprintf(buff, sizeof(buff), "%'" PRIu64, lat->num_skipped);
         scrn_printf(row++, col, "%*s", COLUMN_WIDTH_1, buff);
 
@@ -347,7 +351,7 @@ pktgen_latency_setup(port_info_t *pinfo)
 {
     pkt_seq_t *pkt = &pinfo->seq_pkt[LATENCY_PKT];
 
-    rte_memcpy(&pinfo->seq_pkt[LATENCY_PKT], &pinfo->seq_pkt[SINGLE_PKT], sizeof(pkt_seq_t));
+    rte_memcpy(pkt, &pinfo->seq_pkt[SINGLE_PKT], sizeof(pkt_seq_t));
 
     pkt->pkt_size = LATENCY_PKT_SIZE;
     pkt->ipProto  = PG_IPPROTO_UDP;
