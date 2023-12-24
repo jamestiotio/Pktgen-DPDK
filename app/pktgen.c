@@ -829,6 +829,9 @@ pktgen_packet_classify_bulk(struct rte_mbuf **pkts, int nb_rx, int pid, int qid)
 static void
 pktgen_send_special(port_info_t *pinfo)
 {
+    if (!pktgen_tst_port_flags(pinfo, SEND_ARP_PING_REQUESTS))
+        return;
+
     /* Send packets attached to the sequence packets. */
     for (uint32_t s = 0; s < pinfo->seqCnt; s++) {
         if (unlikely(pktgen_tst_port_flags(pinfo, SEND_GRATUITOUS_ARP)))
@@ -957,8 +960,6 @@ pktgen_setup_packets(uint16_t pid)
     pthread_spin_lock(&port->lock);
 
     if (pktgen_tst_port_flags(pinfo, SETUP_TRANSMIT_PKTS)) {
-        pktgen_clr_port_flags(pinfo, SETUP_TRANSMIT_PKTS);
-
         if (!pktgen_tst_port_flags(pinfo, SEND_PCAP_PKTS)) {
             struct pkt_setup_s s;
             int32_t idx = SINGLE_PKT;
@@ -975,6 +976,7 @@ pktgen_setup_packets(uint16_t pid)
             s.seq_idx = idx;
             rte_mempool_obj_iter(tx_mp, mempool_setup_cb, &s);
         }
+        pktgen_clr_port_flags(pinfo, SETUP_TRANSMIT_PKTS);
     }
     pthread_spin_unlock(&port->lock);
 }
@@ -1027,18 +1029,14 @@ pktgen_main_transmit(port_info_t *pinfo, uint16_t qid)
 {
     struct rte_mempool *mp = NULL;
 
-    /*
-     * Transmit ARP/Ping packets if needed
-     */
-    if (pktgen_tst_port_flags(pinfo, SEND_ARP_PING_REQUESTS))
-        pktgen_send_special(pinfo);
+    /* Transmit ARP/Ping packets if needed */
+    pktgen_send_special(pinfo);
 
     /* When not transmitting on this port then continue. */
     if (pktgen_tst_port_flags(pinfo, SENDING_PACKETS)) {
         mp = l2p_get_tx_mp(pinfo->pid);
 
-        if (pktgen_tst_port_flags(pinfo, SETUP_TRANSMIT_PKTS))
-            pktgen_setup_packets(pinfo->pid);
+        pktgen_setup_packets(pinfo->pid);
 
         pinfo->qcnt[qid]++; /* Count the number of times queue is sending */
 
