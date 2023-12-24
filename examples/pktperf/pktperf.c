@@ -138,6 +138,7 @@ tx_loop(void)
         rte_mempool_obj_iter(port->tx_mp, mbuf_iterate_cb, (void *)lport);
     }
     pthread_spin_unlock(&port->tx_lock);
+
     burst_tsc = rte_rdtsc() + port->tx_cycles;
 
     while (!info->force_quit) {
