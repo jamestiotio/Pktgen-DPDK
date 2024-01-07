@@ -1,3 +1,0 @@
-[submodule "fgen"]
-	path = fgen
-	url = git@github.com:pktgen/fgen.git
