@@ -2,7 +2,7 @@
  * Copyright(c) <2010-2024>, Intel Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
-TXlib */
+ */
 
 /* Created 2010 by Keith Wiles @ intel.com */
 
@@ -46,6 +46,7 @@ next_poisson_time(double rateParameter)
     return -logf(1.0f - ((double)random()) / (double)(RAND_MAX)) / rateParameter;
 }
 
+#ifdef TX_DEBUG
 /* dump a mbuf on console */
 static void
 pg_pktmbuf_dump(FILE *f, const struct rte_mbuf *m, unsigned dump_len)
@@ -84,6 +85,7 @@ pg_pktmbuf_dump(FILE *f, const struct rte_mbuf *m, unsigned dump_len)
         nb_segs--;
     }
 }
+#endif
 
 /**
  *
@@ -310,6 +312,7 @@ pktgen_tstamp_inject(port_info_t *pinfo, uint16_t qid)
     }
 }
 
+#ifdef TX_DEBUG
 static __inline__ void
 pktgen_validate_pkt(rte_mbuf_t *mbuf)
 {
@@ -333,6 +336,7 @@ pktgen_validate_pkt(rte_mbuf_t *mbuf)
         printf("%s: pkt_len %u Mempool '%s'\n", __func__, rte_pktmbuf_pkt_len(mbuf),
                mbuf->pool->name);
 }
+#endif
 
 void
 tx_send_packets(port_info_t *pinfo, uint16_t qid, struct rte_mbuf **pkts, uint16_t nb_pkts)
@@ -343,8 +347,9 @@ tx_send_packets(port_info_t *pinfo, uint16_t qid, struct rte_mbuf **pkts, uint16
         pinfo->queue_stats.q_opackets[qid] += nb_pkts;
         for (int i = 0; i < nb_pkts; i++) {
             pinfo->queue_stats.q_obytes[qid] += rte_pktmbuf_pkt_len(pkts[i]);
-
+#ifdef TX_DEBUG
             pktgen_validate_pkt(pkts[i]);
+#endif
         }
 
         do {
