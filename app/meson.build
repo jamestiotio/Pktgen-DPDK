@@ -36,6 +36,8 @@ cflags = ['-D__PROJECT_VERSION="' + meson.project_version() + '"']
 
 deps = [dpdk, common, utils, vec, plugin, cli, lua]
 
+deps += [dependency('libfgen', required: true)]
+
 deps += [cc.find_library('rte_net_i40e', dirs: [dpdk_libs_path], required: false)]
 deps += [cc.find_library('rte_net_ixgbe', dirs: [dpdk_libs_path], required: false)]
 deps += [cc.find_library('rte_net_ice', dirs: [dpdk_libs_path], required: false)]
