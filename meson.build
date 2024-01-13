@@ -73,7 +73,7 @@ else
 	dpdk_libs_path = join_paths(dpdk_prefix, get_option('libdir'))
 	message('DPDK lib path: ' + dpdk_libs_path)
 
-	dpdk_bond = cc.find_library('librte_net_bond', dirs: [dpdk_libs_path], required: false)
+	dpdk_bond = cc.find_library('rte_net_bond', dirs: [dpdk_libs_path], required: false)
 
 	subdirs =['tools', 'lib', 'examples', 'app', 'doc']
 	foreach d:subdirs
