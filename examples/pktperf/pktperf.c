@@ -22,6 +22,8 @@
 
 #include <pktperf.h>
 
+#include <fgen.h>
+
 txpkts_info_t *info;
 
 static __inline__ void
@@ -242,6 +244,8 @@ main(int argc, char **argv)
     srandom(RANDOM_SEED);
     setlocale(LC_ALL, "");
 
+    (void)rte_set_application_usage_hook(usage);
+
     /* Init EAL. */
     if ((ret = rte_eal_init(argc, argv)) < 0)
         rte_exit(EXIT_FAILURE, "Invalid EAL arguments\n");
@@ -256,6 +260,8 @@ main(int argc, char **argv)
         if (port_setup(&info->ports[pid]) < 0)
             rte_exit(EXIT_FAILURE, "Port setup failed\n");
     }
+
+    info->fgen = fgen_create(0);
 
     /* launch per-lcore init on every worker lcore */
     rte_eal_mp_remote_launch(txpkts_launch_one_lcore, NULL, SKIP_MAIN);

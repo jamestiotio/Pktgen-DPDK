@@ -40,8 +40,8 @@ packet_rate(l2p_port_t *port)
     wire_size       = ((((uint64_t)info->pkt_size - RTE_ETHER_CRC_LEN) + PKT_OVERHEAD_SIZE) * 8);
     port->wire_size = wire_size;
     if (port->link.link_speed == 0) {
-        port->tx_cycles  = 0;
-        port->pps        = 0;
+        port->tx_cycles = 0;
+        port->pps       = 0;
         return;
     }
 
@@ -51,7 +51,7 @@ packet_rate(l2p_port_t *port)
     cpb        = (rte_get_timer_hz() / pps) * (uint64_t)info->burst_count; /* Cycles per Burst */
 
     port->tx_cycles = (info->tx_rate == 0) ? 0 : (uint64_t)port->num_tx_qids * cpb;
-    port->pps        = pps;
+    port->pps       = pps;
 
     DBG_PRINT("      Speed:%'4" PRIu64 " Gbit, Bits: %'6" PRIu64 ", PPS: %'12" PRIu64
               ", CPB: %'" PRIu64 "\n",
@@ -83,6 +83,11 @@ packet_constructor(l2p_lport_t *lport, uint8_t *pkt)
     struct rte_ipv4_hdr *ipv4;
     struct rte_udp_hdr *udp;
     uint16_t tx_qid;
+
+    if (info->fgen_file) {
+        // Get next frame for buffer.
+        return;
+    }
 
     tx_qid = lport->tx_qid;
 

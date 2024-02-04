@@ -42,6 +42,8 @@ foreach arg: warning_flags
 	endif
 endforeach
 
+fgen_dep = dependency('libfgen', required: true)
+
 lua_dep = dependency('', required: false)
 
 if get_option('enable_lua')

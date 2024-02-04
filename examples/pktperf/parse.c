@@ -29,6 +29,8 @@
 #define TIMEOUT_OPT     "timeout"
 #define PROMISCUOUS_OPT "no-promiscuous"
 #define MBUF_COUNT_OPT  "mbuf-count"
+#define FGEN_STRING_OPT "fgen"
+#define FGEN_FILE_OPT   "fgen-file"
 #define VERBOSE_OPT     "verbose"
 #define HELP_OPT        "help"
 
@@ -42,16 +44,18 @@ static const struct option lgopts[] = {
 	{TIMEOUT_OPT,		    1, 0, 'T'},
     {MBUF_COUNT_OPT,        1, 0, 'M'},
 	{PROMISCUOUS_OPT,       0, 0, 'P'},
+	{FGEN_STRING_OPT,       0, 0, 'f'},
+	{FGEN_FILE_OPT,         0, 0, 'F'},
     {VERBOSE_OPT,           0, 0, 'v'},
 	{HELP_OPT,			    0, 0, 'h'},
 	{NULL,				    0, 0, 0}
 };
 // clang-format on
 
-static const char *short_options = "t:b:s:r:d:m:T:M:Pvh";
+static const char *short_options = "t:b:s:r:d:m:T:M:F:f:Pvh";
 
 /* display usage */
-static void
+void
 usage(const char *prgname)
 {
     printf("%s [EAL options] -- [-b burst] [-s size] [-r rate] [-d rxd/txd] [-m map] [-T secs] "
@@ -64,6 +68,8 @@ usage(const char *prgname)
            "\t-T|--timeout <secs>      Timeout period in seconds (default %d second)\n"
            "\t-P|--no-promiscuous      Turn off promiscuous mode (default On)\n"
            "\t-M|--mbuf-count <count>  Number of mbufs to allocate (default %'d, max %'d)\n"
+           "\t-f|--fgen <string>       FGEN string to load\n"
+           "\t-F|--fgen-file <file>    FGEN file to load\n"
            "\t-v|--verbose             Verbose output\n"
            "\t-h|--help                Print this help\n",
            prgname, DEFAULT_BURST_COUNT, DEFAULT_PKT_SIZE, DEFAULT_TX_RATE, DEFAULT_RX_DESC,
@@ -331,6 +337,22 @@ parse_args(int argc, char **argv)
         case 'P': /* Promiscuous option */
             info->promiscuous_on = 0;
             DBG_PRINT("Promiscuous mode: off\n");
+            break;
+
+        case 'f': /* FGEN string */
+            if (fgen_load_strings(info->fgen, (const char **)&optarg, 1) < 0) {
+                ERR_PRINT("Unable to load FGEN string '%s'\n", optarg);
+                usage(prgname);
+                return -1;
+            }
+            break;
+
+        case 'F': /* FGEN file */
+            if (fgen_load_file(info->fgen, optarg) < 0) {
+                ERR_PRINT("Unable to load FGEN file '%s'\n", optarg);
+                usage(prgname);
+                return -1;
+            }
             break;
 
         case 'v': /* Verbose option */

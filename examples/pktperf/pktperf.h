@@ -27,6 +27,9 @@ extern "C" {
 #include <rte_mbuf.h>
 #include <rte_string_fns.h>
 
+#include <fgen_common.h>
+#include <fgen.h>
+
 #define PRINT(format, args...)  \
     do {                        \
         printf(format, ##args); \
@@ -167,6 +170,8 @@ typedef struct {
     uint16_t nb_rxd;         /* number of RX descriptors */
     uint16_t nb_txd;         /* number of TX descriptors */
     uint16_t timeout_secs;   /* Statistics print timeout */
+    fgen_t *fgen;            /* Packet generator */
+    const char *fgen_file;   /* File to use for packet generator */
 } txpkts_info_t;
 
 extern txpkts_info_t *info;
@@ -176,6 +181,7 @@ void packet_rate(l2p_port_t *port);
 void print_stats(void);
 int port_setup(l2p_port_t *port);
 void packet_constructor(l2p_lport_t *lport, uint8_t *pkt);
+void usage(const char *prgname);
 
 #ifdef __cplusplus
 }
