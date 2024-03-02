@@ -3,7 +3,7 @@
 # Copyright(c) <2010-2024>, Intel Corporation. All rights reserved., Powered by DPDK
 
 # Command line arguments: (DPDK args are defaults)
-# ./usr/local/bin/pktgen -c 3fdffe -n 3 -m 512 --proc-type primary -- -v -T -P -G -m [2-3:5-6].0 -m [8-9:10-11].1 -f themes/black-yellow.theme -f cnet-fwd 
+# ./usr/local/bin/pktgen -c 3fdffe -n 3 -m 512 --proc-type primary -- -v -T -P -G -m [2-3:5-6].0 -m [8-9:10-11].1 -f themes/black-yellow.theme -f cnet-fwd
 
 #######################################################################
 # Pktgen Configuration script information:
@@ -65,7 +65,6 @@ disable 0 capture
 disable 0 rx_tap
 disable 0 tx_tap
 disable 0 vlan
-disable 0 rate
 
 #
 # Range packet information:

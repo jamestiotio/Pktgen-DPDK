@@ -3,7 +3,7 @@
 # Copyright(c) <2010-2024>, Intel Corporation. All rights reserved., Powered by DPDK
 
 # Command line arguments: (DPDK args are defaults)
-# ./usr/local/bin/pktgen -c 3ffc004 -n 3 -m 512 --proc-type primary -- -v -T -P -G -m [14-15:16-17].0 -m [18-19:20-21].1 -m [22-23:24-25].2 -f themes/black-yellow.theme -f lb-fwd 
+# ./usr/local/bin/pktgen -c 3ffc004 -n 3 -m 512 --proc-type primary -- -v -T -P -G -m [14-15:16-17].0 -m [18-19:20-21].1 -m [22-23:24-25].2 -f themes/black-yellow.theme -f lb-fwd
 
 #######################################################################
 # Pktgen Configuration script information:
@@ -65,7 +65,6 @@ disable 0 capture
 disable 0 rx_tap
 disable 0 tx_tap
 disable 0 vlan
-disable 0 rate
 
 #
 # Range packet information:
@@ -192,7 +191,6 @@ disable 1 capture
 disable 1 rx_tap
 disable 1 tx_tap
 disable 1 vlan
-disable 1 rate
 
 #
 # Range packet information:
@@ -319,7 +317,6 @@ disable 2 capture
 disable 2 rx_tap
 disable 2 tx_tap
 disable 2 vlan
-disable 2 rate
 
 #
 # Range packet information:

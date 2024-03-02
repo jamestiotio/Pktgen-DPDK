@@ -16,7 +16,7 @@ currdir=`pwd`
 script_dir=$(cd "${BASH_SOURCE[0]%/*}" & pwd -P)
 export sdk_path="${PKTGEN_SDK:-${script_dir%/*}}"
 export target_dir="${PKTGEN_TARGET:-usr/local}"
-export build_dir="${PKTGEN_BUILD:-${currdir}/Builddir}"
+export build_dir="${PKTGEN_BUILD:-${currdir}/builddir}"
 install_path="${PKTGEN_DESTDIR:-${currdir}}"
 
 export lua_enabled="-Denable_lua=false"
@@ -159,7 +159,7 @@ usage() {
 	echo " Build and install environment variables:"
 	echo "  PKTGEN_INSTALL_PATH - The install path, defaults to Pktgen SDK directory"
 	echo "  PKTGEN_TARGET       - The target directory appended to install path, defaults to 'usr'"
-	echo "  PKTGEN_BUILD        - The build directory appended to install path, default to 'Builddir'"
+	echo "  PKTGEN_BUILD        - The build directory appended to install path, default to 'builddir'"
 	echo "  PKTGEN_DESTDIR      - The install destination directory"
 	echo ""
 	dump_options

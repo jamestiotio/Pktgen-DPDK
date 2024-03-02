@@ -92,7 +92,7 @@ make
 or
 make build    # Same as 'make'
 or
-make rebuild  # Rebuild Pktgen, which removes the Builddir then builds it again via meson/ninja
+make rebuild  # Rebuild Pktgen, which removes the 'builddir' then builds it again via meson/ninja
 or
 make rebuildlua # to enable Lua builds
 

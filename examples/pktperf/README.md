@@ -67,7 +67,7 @@ pktperf [EAL options] -- [-b burst] [-s size] [-r rate] [-d rxd/txd] [-m map] [-
 ### Command line example
 
 ```bash
-sudo Builddir/examples/pktperf/pktperf -l 1,2-9,14-21 -a 03:00.0 -a 82:00.0 -- -m "2-5:6-9.0" -m "14-17:18-21.1"
+sudo builddir/examples/pktperf/pktperf -l 1,2-9,14-21 -a 03:00.0 -a 82:00.0 -- -m "2-5:6-9.0" -m "14-17:18-21.1"
 ```
 
 ## CPU/Socket layout
