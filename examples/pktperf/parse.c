@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <alloca.h>
 #include <locale.h>
+#include <pthread.h>
 
 #include <pktperf.h>
 
@@ -244,8 +245,10 @@ parse_args(int argc, char **argv)
     if (!info)
         rte_exit(EXIT_FAILURE, "Unable to allocate memory for txpkts_info_t structure\n");
 
-    for (int i = 0; i < RTE_MAX_ETHPORTS; i++)
+    for (int i = 0; i < RTE_MAX_ETHPORTS; i++) {
         info->ports[i].pid = RTE_MAX_ETHPORTS + 1;
+        pthread_spin_init(&info->ports[i].tx_lock, PTHREAD_PROCESS_PRIVATE);
+    }
 
     if ((info->num_ports = rte_eth_dev_count_avail()) == 0)
         rte_exit(EXIT_FAILURE, "No Ethernet ports found - bye\n");
@@ -387,10 +390,8 @@ parse_args(int argc, char **argv)
     if (info->num_mappings == 0)
         rte_exit(EXIT_FAILURE, "No port mappings specified, use '-m' option\n");
 
-    for (int i = 0; i < info->num_mappings; i++) {
+    for (int i = 0; i < info->num_mappings; i++)
         parse_mapping(info->mappings[i]);
-        free(info->mappings[i]);
-    }
 
     return ret;
 }

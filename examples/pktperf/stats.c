@@ -131,6 +131,10 @@ print_stats(void)
            ", Rx/Tx %'d/%'d, TxRate %u%%, PID: %d\n",
            info->burst_count, info->mbuf_count, info->pkt_size, info->nb_rxd, info->nb_txd,
            info->tx_rate, getpid());
+    printf("         Port mapping: ");
+    for(int i = 0; i < info->num_mappings; i++)
+        printf("%s ", info->mappings[i]);
+    printf("\n");
 
     fflush(stdout);
 }
